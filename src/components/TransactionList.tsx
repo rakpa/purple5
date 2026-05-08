@@ -11,10 +11,12 @@ import {
 import { cn, capitalizeFirst } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTransactions, deleteTransaction } from "@/lib/transactions";
+import { getCategories } from "@/lib/categories";
 import { toast } from "sonner";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from "date-fns";
 import type { Transaction } from "@/types/transaction";
 import { EditTransactionDialog } from "@/components/EditTransactionDialog";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 const filterOptions = [
   { id: "all", label: "All" },
@@ -77,6 +79,15 @@ export function TransactionList() {
       console.error("Error fetching transactions:", error);
     },
   });
+
+  const { data: allCategories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => getCategories(),
+  });
+
+  const categoryIconMap = new Map(
+    allCategories.map((cat) => [cat.name.trim().toLowerCase(), cat.icon])
+  );
 
   const deleteMutation = useMutation({
     mutationFn: deleteTransaction,
@@ -200,6 +211,7 @@ export function TransactionList() {
         <div className="space-y-3">
           {filteredTransactions.map((transaction, index) => {
             const categoryName = transaction.category;
+            const iconName = categoryIconMap.get(categoryName.trim().toLowerCase());
             return (
               <div
                 key={transaction.id}
@@ -215,7 +227,11 @@ export function TransactionList() {
                       : "bg-destructive/10 text-destructive"
                   )}
                 >
-                  {categoryName.charAt(0).toUpperCase()}
+                  {iconName ? (
+                    <CategoryIcon iconName={iconName} size={18} className="!p-0 !shadow-none" />
+                  ) : (
+                    categoryName.charAt(0).toUpperCase()
+                  )}
                 </div>
 
                 {/* Main Content */}

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Search, TrendingUp, TrendingDown, ArrowUp, ArrowDown, Edit2, Trash2, ChevronDown, Calendar } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTransactions, deleteTransaction } from "@/lib/transactions";
+import { getCategories } from "@/lib/categories";
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from "date-fns";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import { toast } from "sonner";
 import { cn, capitalizeFirst } from "@/lib/utils";
 import type { Transaction } from "@/types/transaction";
 import { EditTransactionDialog } from "@/components/EditTransactionDialog";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 const COLORS = {
   income: "#22c55e",
@@ -105,6 +107,16 @@ export default function Dashboard() {
     queryKey: ["transactions", { startDate: dateRange.start, endDate: dateRange.end }],
     queryFn: () => getTransactions({ startDate: dateRange.start, endDate: dateRange.end }),
   });
+
+  const { data: allCategories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => getCategories(),
+  });
+
+  const categoryIconMap = useMemo(
+    () => new Map(allCategories.map((cat) => [cat.name.trim().toLowerCase(), cat.icon])),
+    [allCategories]
+  );
 
   // Calculate metrics
   const metrics = useMemo(() => {
@@ -628,6 +640,7 @@ export default function Dashboard() {
               <div className="space-y-2 sm:space-y-3">
                 {recentTransactions.map((transaction) => {
                   const isIncome = transaction.type === "income";
+                  const iconName = categoryIconMap.get(transaction.category.trim().toLowerCase());
                   
                   return (
                     <div
@@ -643,7 +656,9 @@ export default function Dashboard() {
                             : "bg-red-100 text-red-600"
                         )}
                       >
-                        {isIncome ? (
+                        {iconName ? (
+                          <CategoryIcon iconName={iconName} size={20} className="!p-0 !shadow-none" />
+                        ) : isIncome ? (
                           <ArrowUp className="h-5 w-5 sm:h-5 sm:w-5" />
                         ) : (
                           <ArrowDown className="h-5 w-5 sm:h-5 sm:w-5" />
