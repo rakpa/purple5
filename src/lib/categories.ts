@@ -47,6 +47,19 @@ export async function createCategory(data: CategoryInsert) {
 
 export async function updateCategory(id: string, data: Partial<CategoryInsert>) {
   const userId = await getCurrentUserId();
+
+  // Fetch current category so we can propagate name changes safely
+  const { data: currentCategory, error: currentCategoryError } = await supabase
+    .from('categories')
+    .select('id, name, type')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .single();
+
+  if (currentCategoryError) {
+    throw new Error(currentCategoryError.message);
+  }
+
   const { data: category, error } = await supabase
     .from('categories')
     .update({ ...data, updated_at: new Date().toISOString() })
@@ -57,6 +70,20 @@ export async function updateCategory(id: string, data: Partial<CategoryInsert>) 
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  // Keep historical transactions consistent when category name changes
+  if (data.name && data.name !== currentCategory.name) {
+    const { error: transactionsUpdateError } = await supabase
+      .from('transactions')
+      .update({ category: data.name, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('type', currentCategory.type)
+      .eq('category', currentCategory.name);
+
+    if (transactionsUpdateError) {
+      throw new Error(transactionsUpdateError.message);
+    }
   }
 
   return category as Category;

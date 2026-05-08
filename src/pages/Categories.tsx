@@ -14,6 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn, capitalizeFirst } from "@/lib/utils";
 import { Trash2, Edit2 } from "lucide-react";
@@ -45,7 +52,10 @@ export default function Categories() {
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
   const [type, setType] = useState<"income" | "expense">("expense");
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editIcon, setEditIcon] = useState("");
+  const [editType, setEditType] = useState<"income" | "expense">("expense");
   const queryClient = useQueryClient();
 
   const { data: categories = [], isLoading } = useQuery({
@@ -72,9 +82,12 @@ export default function Categories() {
     onSuccess: () => {
       toast.success("Category updated successfully!");
       queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
       setName("");
       setIcon("");
-      setEditingCategoryId(null);
+      setEditingCategory(null);
+      setEditName("");
+      setEditIcon("");
     },
     onError: (error: Error) => {
       toast.error(`Failed to update category: ${error.message}`);
@@ -100,18 +113,11 @@ export default function Categories() {
       return;
     }
 
-    const payload = {
+    createMutation.mutate({
       name: name.trim(),
       icon,
       type,
-    };
-
-    if (editingCategoryId) {
-      updateMutation.mutate({ id: editingCategoryId, data: payload });
-      return;
-    }
-
-    createMutation.mutate(payload);
+    });
   };
 
   const handleDelete = (id: string) => {
@@ -121,16 +127,38 @@ export default function Categories() {
   };
 
   const handleEdit = (category: Category) => {
-    setEditingCategoryId(category.id);
-    setName(category.name);
-    setIcon(category.icon);
-    setType(category.type);
+    setEditingCategory(category);
+    setEditName(category.name);
+    setEditIcon(category.icon);
+    setEditType(category.type);
   };
 
-  const handleCancelEdit = () => {
-    setEditingCategoryId(null);
-    setName("");
-    setIcon("");
+  const handleUpdateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!editingCategory) return;
+
+    if (!editName.trim() || !editIcon) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    updateMutation.mutate({
+      id: editingCategory.id,
+      data: {
+        name: editName.trim(),
+        icon: editIcon,
+        type: editType,
+      },
+    });
+  };
+
+  const handleEditDialogChange = (open: boolean) => {
+    if (!open) {
+      setEditingCategory(null);
+      setEditName("");
+      setEditIcon("");
+    }
   };
 
   const filteredCategories = categories.filter((cat) => cat.type === type);
@@ -144,10 +172,8 @@ export default function Categories() {
           <div className="lg:sticky lg:top-24 lg:self-start order-2 lg:order-1">
             <Card className="rounded-2xl shadow-card">
               <CardHeader>
-                <CardTitle>{editingCategoryId ? "Edit Category" : "Add Category"}</CardTitle>
-                <CardDescription>
-                  {editingCategoryId ? "Update category details" : "Create a custom category with icon"}
-                </CardDescription>
+                <CardTitle>Add Category</CardTitle>
+                <CardDescription>Create a custom category with icon</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-5">
@@ -222,27 +248,10 @@ export default function Categories() {
                     type="submit"
                     size="xl"
                     className="w-full mt-6"
-                    disabled={createMutation.isPending || updateMutation.isPending}
+                    disabled={createMutation.isPending}
                   >
-                    {editingCategoryId
-                      ? updateMutation.isPending
-                        ? "Saving..."
-                        : "Save Changes"
-                      : createMutation.isPending
-                        ? "Adding..."
-                        : "Add Category"}
+                    {createMutation.isPending ? "Adding..." : "Add Category"}
                   </Button>
-                  {editingCategoryId && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="xl"
-                      className="w-full"
-                      onClick={handleCancelEdit}
-                    >
-                      Cancel Edit
-                    </Button>
-                  )}
                 </form>
               </CardContent>
             </Card>
@@ -340,6 +349,68 @@ export default function Categories() {
           </div>
         </div>
       </main>
+
+      <Dialog open={!!editingCategory} onOpenChange={handleEditDialogChange}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Category</DialogTitle>
+            <DialogDescription>
+              Original values are prefilled. Update the name and save.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleUpdateSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-category-name">Category Name</Label>
+              <Input
+                id="edit-category-name"
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="e.g., Groceries"
+                className="h-11 rounded-xl"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-category-icon">Icon</Label>
+              <Select value={editIcon} onValueChange={setEditIcon} required>
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Select an icon" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px] rounded-xl">
+                  {categoryIcons.map((item) => (
+                    <SelectItem key={item.icon} value={item.icon} className="rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <CategoryIcon iconName={item.icon} size={18} />
+                        <span>{item.label}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-category-type">Type</Label>
+              <Select value={editType} onValueChange={(value) => setEditType(value as "income" | "expense")} required>
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="expense">Expense</SelectItem>
+                  <SelectItem value="income">Income</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button type="submit" size="xl" className="w-full" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Updating..." : "Update Category"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
