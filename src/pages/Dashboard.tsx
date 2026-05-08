@@ -651,7 +651,9 @@ export default function Dashboard() {
                       <div
                         className={cn(
                           "flex h-12 w-12 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl",
-                          isIncome
+                          iconName
+                            ? "bg-transparent text-inherit"
+                            : isIncome
                             ? "bg-green-100 text-green-600"
                             : "bg-red-100 text-red-600"
                         )}

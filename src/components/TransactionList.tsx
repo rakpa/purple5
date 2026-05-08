@@ -222,7 +222,9 @@ export function TransactionList() {
                 <div
                   className={cn(
                     "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-semibold",
-                    transaction.type === "income"
+                    iconName
+                      ? "bg-transparent text-inherit"
+                      : transaction.type === "income"
                       ? "bg-success/10 text-success"
                       : "bg-destructive/10 text-destructive"
                   )}
