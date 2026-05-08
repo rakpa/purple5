@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getCategories, createCategory, deleteCategory } from "@/lib/categories";
+import { getCategories, createCategory, updateCategory, deleteCategory } from "@/lib/categories";
+import type { Category } from "@/types/category";
 import { Navigation } from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,7 @@ export default function Categories() {
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
   const [type, setType] = useState<"income" | "expense">("expense");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: categories = [], isLoading } = useQuery({
@@ -61,6 +63,21 @@ export default function Categories() {
     },
     onError: (error: Error) => {
       toast.error(`Failed to create category: ${error.message}`);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { name: string; icon: string; type: "income" | "expense" } }) =>
+      updateCategory(id, data),
+    onSuccess: () => {
+      toast.success("Category updated successfully!");
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      setName("");
+      setIcon("");
+      setEditingCategoryId(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update category: ${error.message}`);
     },
   });
 
@@ -83,11 +100,18 @@ export default function Categories() {
       return;
     }
 
-    createMutation.mutate({
+    const payload = {
       name: name.trim(),
       icon,
       type,
-    });
+    };
+
+    if (editingCategoryId) {
+      updateMutation.mutate({ id: editingCategoryId, data: payload });
+      return;
+    }
+
+    createMutation.mutate(payload);
   };
 
   const handleDelete = (id: string) => {
@@ -96,6 +120,18 @@ export default function Categories() {
     }
   };
 
+  const handleEdit = (category: Category) => {
+    setEditingCategoryId(category.id);
+    setName(category.name);
+    setIcon(category.icon);
+    setType(category.type);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCategoryId(null);
+    setName("");
+    setIcon("");
+  };
 
   const filteredCategories = categories.filter((cat) => cat.type === type);
 
@@ -108,8 +144,10 @@ export default function Categories() {
           <div className="lg:sticky lg:top-24 lg:self-start order-2 lg:order-1">
             <Card className="rounded-2xl shadow-card">
               <CardHeader>
-                <CardTitle>Add Category</CardTitle>
-                <CardDescription>Create a custom category with icon</CardDescription>
+                <CardTitle>{editingCategoryId ? "Edit Category" : "Add Category"}</CardTitle>
+                <CardDescription>
+                  {editingCategoryId ? "Update category details" : "Create a custom category with icon"}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-5">
@@ -184,10 +222,27 @@ export default function Categories() {
                     type="submit"
                     size="xl"
                     className="w-full mt-6"
-                    disabled={createMutation.isPending}
+                    disabled={createMutation.isPending || updateMutation.isPending}
                   >
-                    {createMutation.isPending ? "Adding..." : "Add Category"}
+                    {editingCategoryId
+                      ? updateMutation.isPending
+                        ? "Saving..."
+                        : "Save Changes"
+                      : createMutation.isPending
+                        ? "Adding..."
+                        : "Add Category"}
                   </Button>
+                  {editingCategoryId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xl"
+                      className="w-full"
+                      onClick={handleCancelEdit}
+                    >
+                      Cancel Edit
+                    </Button>
+                  )}
                 </form>
               </CardContent>
             </Card>
@@ -258,7 +313,7 @@ export default function Categories() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                            onClick={() => toast.info("Edit functionality coming soon!")}
+                            onClick={() => handleEdit(category)}
                           >
                             <Edit2 className="h-4 w-4" />
                           </Button>
