@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Check, ChevronsUpDown } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -13,12 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Card,
   CardContent,
@@ -41,6 +42,7 @@ export function AddExpenseForm() {
   );
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
+  const [categoryOpen, setCategoryOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -61,6 +63,7 @@ export function AddExpenseForm() {
       setAmount("");
       setDescription("");
       setCategory("");
+      setCategoryOpen(false);
     },
     onError: (error: Error) => {
       toast.error(`Failed to add ${type}: ${error.message}`);
@@ -173,21 +176,64 @@ export function AddExpenseForm() {
           {/* Category */}
           <div className="space-y-2">
             <Label htmlFor="category">Category</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="h-11 rounded-xl shadow-sm">
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.name}>
-                    <div className="flex items-center gap-2">
-                      <CategoryIcon iconName={cat.icon} size={18} />
-                      {cat.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  id="category"
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={categoryOpen}
+                  className="h-11 w-full justify-between rounded-xl shadow-sm"
+                >
+                  {category ? (
+                    <span className="flex items-center gap-2 truncate">
+                      {(() => {
+                        const selectedCategory = categories.find((cat) => cat.name === category);
+                        return selectedCategory ? (
+                          <CategoryIcon iconName={selectedCategory.icon} size={18} />
+                        ) : null;
+                      })()}
+                      <span className="truncate">{category}</span>
+                    </span>
+                  ) : (
+                    "Select category"
+                  )}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search category..." />
+                  <CommandList>
+                    <CommandEmpty>No category found.</CommandEmpty>
+                    <CommandGroup>
+                      {categories.map((cat) => (
+                        <CommandItem
+                          key={cat.id}
+                          value={cat.name}
+                          onSelect={() => {
+                            setCategory(cat.name);
+                            setCategoryOpen(false);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <CategoryIcon iconName={cat.icon} size={18} />
+                            <span>{cat.name}</span>
+                          </div>
+                          <Check
+                            className={cn(
+                              "ml-auto h-4 w-4",
+                              category === cat.name ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Description */}
