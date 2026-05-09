@@ -355,6 +355,17 @@ export default function India() {
     setTableEndDate(draftTableEndDate);
   };
 
+  const handleClearTableFilters = () => {
+    setDraftTableView("entries");
+    setDraftTableCategoryFilter("all");
+    setDraftTableStartDate(undefined);
+    setDraftTableEndDate(undefined);
+    setEntriesTableView("entries");
+    setTableCategoryFilter("all");
+    setTableStartDate(undefined);
+    setTableEndDate(undefined);
+  };
+
   // Detailed category-wise summary for quick analysis
   const categoryWiseDetails = useMemo(() => {
     const categoryMap = new Map<
@@ -972,9 +983,19 @@ export default function India() {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <Button onClick={handleApplyTableFilters} className="w-full rounded-xl">
-                  Apply Filters
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={handleApplyTableFilters} className="rounded-xl px-5">
+                    Apply Filters
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleClearTableFilters}
+                    className="rounded-xl px-5"
+                  >
+                    Clear
+                  </Button>
+                </div>
               </div>
             </div>
             {isLoadingEntries ? (
