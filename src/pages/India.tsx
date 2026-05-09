@@ -58,6 +58,7 @@ export default function India() {
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [activeTab, setActiveTab] = useState("pln");
+  const [entriesTableView, setEntriesTableView] = useState<"entries" | "category-wise">("entries");
   
   const queryClient = useQueryClient();
 
@@ -856,85 +857,38 @@ export default function India() {
           </CardContent>
         </Card>
 
-        {/* Category-wise Details */}
-        <Card className="mb-8 rounded-2xl shadow-card overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold font-sans">Category-wise Details</CardTitle>
-            <CardDescription>
-              View total entries and amounts grouped by category
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            {categoryWiseDetails.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-black text-white">
-                      <th className="px-4 py-3 text-left text-xs font-semibold border-r border-gray-700 min-w-[170px]">
-                        Category
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold border-r border-gray-700 min-w-[100px]">
-                        Entries
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold border-r border-gray-700 min-w-[140px]">
-                        Total PLN
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold min-w-[140px]">
-                        Total INR
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {categoryWiseDetails.map((item, index) => (
-                      <tr
-                        key={item.category}
-                        className={cn(
-                          "border-b border-gray-300 transition-colors hover:bg-muted/50",
-                          index % 2 === 0 ? "bg-background" : "bg-muted/30"
-                        )}
-                      >
-                        <td className="px-4 py-3 text-sm border-r border-gray-300">
-                          <div className="flex items-center gap-2">
-                            {(() => {
-                              const category = categories.find((cat) => cat.name === item.category);
-                              return category ? (
-                                <CategoryIcon iconName={category.icon} size={16} />
-                              ) : (
-                                <div
-                                  className="h-3 w-3 rounded-full"
-                                  style={{ backgroundColor: getCategoryColor(item.category) }}
-                                />
-                              );
-                            })()}
-                            <span>{capitalizeFirst(item.category)}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right tabular-nums border-r border-gray-300">
-                          {item.count}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right tabular-nums border-r border-gray-300">
-                          {formatPLN(item.totalPln)} PLN
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right tabular-nums">
-                          {formatINR(item.totalInr)} INR
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="py-12 text-center text-muted-foreground">
-                No category-wise data available
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Currency Entries Table */}
         <Card className="mb-8 rounded-2xl shadow-card overflow-hidden">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold font-sans">Currency Entries</CardTitle>
+            <div className="flex items-center justify-between gap-4">
+              <CardTitle className="text-lg font-semibold font-sans">Currency Entries</CardTitle>
+              <div className="flex rounded-lg bg-muted p-1">
+                <button
+                  type="button"
+                  onClick={() => setEntriesTableView("entries")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                    entriesTableView === "entries"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Entries
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEntriesTableView("category-wise")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                    entriesTableView === "category-wise"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Category-wise
+                </button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {isLoadingEntries ? (
@@ -952,79 +906,118 @@ export default function India() {
                       <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs font-semibold font-sans border-r border-gray-700 min-w-[100px]">Category</th>
                       <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs font-semibold font-sans border-r border-gray-700 min-w-[100px] sm:w-40">Amount (PLN)</th>
                       <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs font-semibold font-sans border-r border-gray-700 min-w-[100px] sm:w-40">Amount (INR)</th>
-                      {isEditMode && (
+                      {isEditMode && entriesTableView === "entries" && (
                         <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs font-semibold font-sans min-w-[80px] sm:w-24">Actions</th>
                       )}
                     </tr>
                   </thead>
                   {/* Table Body */}
                   <tbody>
-                    {currencyEntries.map((entry, index) => (
-                      <tr
-                        key={entry.id}
-                        className={cn(
-                          "group border-b border-gray-300 transition-colors hover:bg-muted/50",
-                          index % 2 === 0 ? "bg-background" : "bg-muted/30"
-                        )}
-                      >
-                        <td className="px-3 sm:px-5 py-3 sm:py-4 text-xs sm:text-sm text-foreground font-sans border-r border-gray-300 min-w-[120px] sm:w-48 whitespace-nowrap">
-                          {formatDate(entry.date)}
-                        </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground font-sans border-r border-gray-300 min-w-[100px]">
-                          <div className="max-w-[120px] sm:max-w-none break-words overflow-hidden">
-                            {entry.description}
-                          </div>
-                        </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground font-sans border-r border-gray-300 min-w-[100px]">
-                          {entry.category ? (
-                            <div className="flex items-center gap-2">
-                              {(() => {
-                                const category = categories.find(cat => cat.name === entry.category);
-                                return category ? (
-                                  <>
+                    {entriesTableView === "entries"
+                      ? currencyEntries.map((entry, index) => (
+                          <tr
+                            key={entry.id}
+                            className={cn(
+                              "group border-b border-gray-300 transition-colors hover:bg-muted/50",
+                              index % 2 === 0 ? "bg-background" : "bg-muted/30"
+                            )}
+                          >
+                            <td className="px-3 sm:px-5 py-3 sm:py-4 text-xs sm:text-sm text-foreground font-sans border-r border-gray-300 min-w-[120px] sm:w-48 whitespace-nowrap">
+                              {formatDate(entry.date)}
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground font-sans border-r border-gray-300 min-w-[100px]">
+                              <div className="max-w-[120px] sm:max-w-none break-words overflow-hidden">
+                                {entry.description}
+                              </div>
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground font-sans border-r border-gray-300 min-w-[100px]">
+                              {entry.category ? (
+                                <div className="flex items-center gap-2">
+                                  {(() => {
+                                    const category = categories.find(cat => cat.name === entry.category);
+                                    return category ? (
+                                      <>
+                                        <CategoryIcon iconName={category.icon} size={16} />
+                                        <span>{capitalizeFirst(entry.category)}</span>
+                                      </>
+                                    ) : (
+                                      <span>{capitalizeFirst(entry.category)}</span>
+                                    );
+                                  })()}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground text-right font-sans tabular-nums border-r border-gray-300 min-w-[100px] sm:w-40 whitespace-nowrap">
+                              {formatPLN(entry.pln_amount)} PLN
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground text-right font-sans tabular-nums border-r border-gray-300 min-w-[100px] sm:w-40 whitespace-nowrap">
+                              {formatINR(entry.inr_amount)} INR
+                            </td>
+                            {isEditMode && (
+                              <td className="px-3 sm:px-6 py-3 sm:py-4 text-center min-w-[80px] sm:w-24">
+                                <div className="flex items-center justify-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-foreground"
+                                    onClick={() => handleEdit(entry)}
+                                  >
+                                    <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-red-600"
+                                    onClick={() => handleDelete(entry.id)}
+                                    disabled={deleteMutation.isPending}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        ))
+                      : categoryWiseDetails.map((item, index) => (
+                          <tr
+                            key={item.category}
+                            className={cn(
+                              "border-b border-gray-300 transition-colors hover:bg-muted/50",
+                              index % 2 === 0 ? "bg-background" : "bg-muted/30"
+                            )}
+                          >
+                            <td className="px-3 sm:px-5 py-3 sm:py-4 text-xs sm:text-sm text-foreground font-sans border-r border-gray-300 min-w-[120px] sm:w-48 whitespace-nowrap">
+                              -
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground font-sans border-r border-gray-300 min-w-[100px]">
+                              <span className="font-medium">{item.count} entries</span>
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground font-sans border-r border-gray-300 min-w-[100px]">
+                              <div className="flex items-center gap-2">
+                                {(() => {
+                                  const category = categories.find((cat) => cat.name === item.category);
+                                  return category ? (
                                     <CategoryIcon iconName={category.icon} size={16} />
-                                    <span>{capitalizeFirst(entry.category)}</span>
-                                  </>
-                                ) : (
-                                  <span>{capitalizeFirst(entry.category)}</span>
-                                );
-                              })()}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground text-right font-sans tabular-nums border-r border-gray-300 min-w-[100px] sm:w-40 whitespace-nowrap">
-                          {formatPLN(entry.pln_amount)} PLN
-                        </td>
-                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground text-right font-sans tabular-nums border-r border-gray-300 min-w-[100px] sm:w-40 whitespace-nowrap">
-                          {formatINR(entry.inr_amount)} INR
-                        </td>
-                        {isEditMode && (
-                          <td className="px-3 sm:px-6 py-3 sm:py-4 text-center min-w-[80px] sm:w-24">
-                            <div className="flex items-center justify-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-foreground"
-                                onClick={() => handleEdit(entry)}
-                              >
-                                <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 sm:h-8 sm:w-8 text-muted-foreground hover:text-red-600"
-                                onClick={() => handleDelete(entry.id)}
-                                disabled={deleteMutation.isPending}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
+                                  ) : (
+                                    <div
+                                      className="h-3 w-3 rounded-full"
+                                      style={{ backgroundColor: getCategoryColor(item.category) }}
+                                    />
+                                  );
+                                })()}
+                                <span>{capitalizeFirst(item.category)}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground text-right font-sans tabular-nums border-r border-gray-300 min-w-[100px] sm:w-40 whitespace-nowrap">
+                              {formatPLN(item.totalPln)} PLN
+                            </td>
+                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-foreground text-right font-sans tabular-nums border-r border-gray-300 min-w-[100px] sm:w-40 whitespace-nowrap">
+                              {formatINR(item.totalInr)} INR
+                            </td>
+                          </tr>
+                        ))}
                   </tbody>
                 </table>
               </div>
