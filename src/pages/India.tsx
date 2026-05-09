@@ -321,6 +321,38 @@ export default function India() {
       .sort((a, b) => b.amount - a.amount);
   }, [currencyEntries]);
 
+  // Detailed category-wise summary for quick analysis
+  const categoryWiseDetails = useMemo(() => {
+    const categoryMap = new Map<
+      string,
+      { count: number; totalPln: number; totalInr: number }
+    >();
+
+    currencyEntries.forEach((entry) => {
+      const category = entry.category || "Uncategorized";
+      const current = categoryMap.get(category) || {
+        count: 0,
+        totalPln: 0,
+        totalInr: 0,
+      };
+
+      categoryMap.set(category, {
+        count: current.count + 1,
+        totalPln: current.totalPln + parseFloat(entry.pln_amount.toString()),
+        totalInr: current.totalInr + parseFloat(entry.inr_amount.toString()),
+      });
+    });
+
+    return Array.from(categoryMap.entries())
+      .map(([category, details]) => ({
+        category,
+        count: details.count,
+        totalPln: Number(details.totalPln.toFixed(2)),
+        totalInr: Number(details.totalInr.toFixed(2)),
+      }))
+      .sort((a, b) => b.totalPln - a.totalPln);
+  }, [currencyEntries]);
+
 
   const getCategoryColor = (category: string) => {
     const lower = category.toLowerCase();
@@ -821,6 +853,81 @@ export default function India() {
                 </Button>
               </div>
             </form>
+          </CardContent>
+        </Card>
+
+        {/* Category-wise Details */}
+        <Card className="mb-8 rounded-2xl shadow-card overflow-hidden">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold font-sans">Category-wise Details</CardTitle>
+            <CardDescription>
+              View total entries and amounts grouped by category
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            {categoryWiseDetails.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-black text-white">
+                      <th className="px-4 py-3 text-left text-xs font-semibold border-r border-gray-700 min-w-[170px]">
+                        Category
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold border-r border-gray-700 min-w-[100px]">
+                        Entries
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold border-r border-gray-700 min-w-[140px]">
+                        Total PLN
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold min-w-[140px]">
+                        Total INR
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {categoryWiseDetails.map((item, index) => (
+                      <tr
+                        key={item.category}
+                        className={cn(
+                          "border-b border-gray-300 transition-colors hover:bg-muted/50",
+                          index % 2 === 0 ? "bg-background" : "bg-muted/30"
+                        )}
+                      >
+                        <td className="px-4 py-3 text-sm border-r border-gray-300">
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const category = categories.find((cat) => cat.name === item.category);
+                              return category ? (
+                                <CategoryIcon iconName={category.icon} size={16} />
+                              ) : (
+                                <div
+                                  className="h-3 w-3 rounded-full"
+                                  style={{ backgroundColor: getCategoryColor(item.category) }}
+                                />
+                              );
+                            })()}
+                            <span>{capitalizeFirst(item.category)}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right tabular-nums border-r border-gray-300">
+                          {item.count}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right tabular-nums border-r border-gray-300">
+                          {formatPLN(item.totalPln)} PLN
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right tabular-nums">
+                          {formatINR(item.totalInr)} INR
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="py-12 text-center text-muted-foreground">
+                No category-wise data available
+              </div>
+            )}
           </CardContent>
         </Card>
 
