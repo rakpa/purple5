@@ -973,7 +973,7 @@ export default function India() {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="inline-flex w-fit shrink-0 items-center gap-2 !flex-nowrap whitespace-nowrap">
+                <div className="flex flex-row items-center gap-2 whitespace-nowrap">
                   <Button
                     onClick={handleApplyTableFilters}
                     className="h-11 min-w-[110px] shrink-0 rounded-xl bg-blue-600 px-5 text-white hover:bg-blue-700 whitespace-nowrap"
