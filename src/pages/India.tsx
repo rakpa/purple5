@@ -973,7 +973,7 @@ export default function India() {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-nowrap items-center gap-2">
                   <Button onClick={handleApplyTableFilters} className="rounded-xl px-5">
                     Apply Filters
                   </Button>
