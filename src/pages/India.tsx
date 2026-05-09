@@ -915,8 +915,8 @@ export default function India() {
               <p className="mb-4 text-sm text-muted-foreground">
                 Filter by category and date range
               </p>
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:max-w-3xl">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
                   <Select value={draftTableCategoryFilter} onValueChange={setDraftTableCategoryFilter}>
                     <SelectTrigger className="rounded-xl">
                       <SelectValue placeholder="Select Category" />
@@ -973,7 +973,7 @@ export default function India() {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="inline-flex w-fit items-center gap-2 !flex-nowrap whitespace-nowrap">
+                <div className="inline-flex w-fit shrink-0 items-center gap-2 !flex-nowrap whitespace-nowrap">
                   <Button
                     onClick={handleApplyTableFilters}
                     className="h-11 min-w-[110px] shrink-0 rounded-xl bg-blue-600 px-5 text-white hover:bg-blue-700 whitespace-nowrap"
