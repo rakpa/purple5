@@ -974,14 +974,16 @@ export default function India() {
                   </Popover>
                 </div>
                 <div className="flex flex-nowrap items-center gap-2">
-                  <Button onClick={handleApplyTableFilters} className="rounded-xl px-5">
+                  <Button
+                    onClick={handleApplyTableFilters}
+                    className="h-11 rounded-xl bg-blue-600 px-6 text-white hover:bg-blue-700 whitespace-nowrap"
+                  >
                     Apply Filters
                   </Button>
                   <Button
                     type="button"
-                    variant="outline"
                     onClick={handleClearTableFilters}
-                    className="rounded-xl px-5"
+                    className="h-11 rounded-xl bg-gray-600 px-6 text-white hover:bg-gray-700 whitespace-nowrap"
                   >
                     Clear
                   </Button>
