@@ -913,20 +913,10 @@ export default function India() {
                 <h3 className="text-base font-semibold">Quick Filters</h3>
               </div>
               <p className="mb-4 text-sm text-muted-foreground">
-                Filter by table view, category, and date range
+                Filter by category and date range
               </p>
               <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <Select value={draftTableView} onValueChange={(value) => setDraftTableView(value as "entries" | "category-wise")}>
-                    <SelectTrigger className="rounded-xl">
-                      <SelectValue placeholder="Select View" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="entries">All Entries</SelectItem>
-                      <SelectItem value="category-wise">Category-wise</SelectItem>
-                    </SelectContent>
-                  </Select>
-
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:max-w-3xl">
                   <Select value={draftTableCategoryFilter} onValueChange={setDraftTableCategoryFilter}>
                     <SelectTrigger className="rounded-xl">
                       <SelectValue placeholder="Select Category" />
@@ -983,7 +973,7 @@ export default function India() {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-2">
                   <Button onClick={handleApplyTableFilters} className="rounded-xl px-5">
                     Apply Filters
                   </Button>
