@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { TrendingUp, TrendingDown, ArrowUp, ArrowDown, MapPin, Calendar, Edit2, Trash2 } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowUp, ArrowDown, MapPin, Calendar, Edit2, Trash2, Filter } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getCurrencyEntries, createCurrencyEntry, updateCurrencyEntry, deleteCurrencyEntry } from "@/lib/currency-entries";
 import { getCategories } from "@/lib/categories";
@@ -59,6 +59,14 @@ export default function India() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [activeTab, setActiveTab] = useState("pln");
   const [entriesTableView, setEntriesTableView] = useState<"entries" | "category-wise">("entries");
+  const [draftTableView, setDraftTableView] = useState<"entries" | "category-wise">("entries");
+  const [tableCategoryFilter, setTableCategoryFilter] = useState<string>("all");
+  const [draftTableCategoryFilter, setDraftTableCategoryFilter] = useState<string>("all");
+  const [tableStartDate, setTableStartDate] = useState<Date | undefined>(undefined);
+  const [tableEndDate, setTableEndDate] = useState<Date | undefined>(undefined);
+  const [draftTableStartDate, setDraftTableStartDate] = useState<Date | undefined>(undefined);
+  const [draftTableEndDate, setDraftTableEndDate] = useState<Date | undefined>(undefined);
+  const [isTableDatePickerOpen, setIsTableDatePickerOpen] = useState(false);
   
   const queryClient = useQueryClient();
 
@@ -322,6 +330,31 @@ export default function India() {
       .sort((a, b) => b.amount - a.amount);
   }, [currencyEntries]);
 
+  const filteredTableEntries = useMemo(() => {
+    return currencyEntries.filter((entry) => {
+      const categoryMatch =
+        tableCategoryFilter === "all" ||
+        (entry.category || "Uncategorized").trim().toLowerCase() === tableCategoryFilter.trim().toLowerCase();
+
+      const entryDate = new Date(`${entry.date}T00:00:00`);
+      const startMatch = !tableStartDate || entryDate >= new Date(new Date(tableStartDate).setHours(0, 0, 0, 0));
+      const endMatch = !tableEndDate || entryDate <= new Date(new Date(tableEndDate).setHours(23, 59, 59, 999));
+
+      return categoryMatch && startMatch && endMatch;
+    });
+  }, [currencyEntries, tableCategoryFilter, tableStartDate, tableEndDate]);
+
+  const handleApplyTableFilters = () => {
+    if (draftTableStartDate && draftTableEndDate && draftTableEndDate < draftTableStartDate) {
+      toast.error("End date must be after start date");
+      return;
+    }
+    setEntriesTableView(draftTableView);
+    setTableCategoryFilter(draftTableCategoryFilter);
+    setTableStartDate(draftTableStartDate);
+    setTableEndDate(draftTableEndDate);
+  };
+
   // Detailed category-wise summary for quick analysis
   const categoryWiseDetails = useMemo(() => {
     const categoryMap = new Map<
@@ -329,7 +362,7 @@ export default function India() {
       { count: number; totalPln: number; totalInr: number }
     >();
 
-    currencyEntries.forEach((entry) => {
+    filteredTableEntries.forEach((entry) => {
       const category = entry.category || "Uncategorized";
       const current = categoryMap.get(category) || {
         count: 0,
@@ -352,7 +385,7 @@ export default function India() {
         totalInr: Number(details.totalInr.toFixed(2)),
       }))
       .sort((a, b) => b.totalPln - a.totalPln);
-  }, [currencyEntries]);
+  }, [filteredTableEntries]);
 
 
   const getCategoryColor = (category: string) => {
@@ -860,42 +893,93 @@ export default function India() {
         {/* Currency Entries Table */}
         <Card className="mb-8 rounded-2xl shadow-card overflow-hidden">
           <CardHeader>
-            <div className="flex items-center justify-between gap-4">
-              <CardTitle className="text-lg font-semibold font-sans">Currency Entries</CardTitle>
-              <div className="flex rounded-lg bg-muted p-1">
-                <button
-                  type="button"
-                  onClick={() => setEntriesTableView("entries")}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                    entriesTableView === "entries"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Entries
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEntriesTableView("category-wise")}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-medium transition-all",
-                    entriesTableView === "category-wise"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Category-wise
-                </button>
-              </div>
-            </div>
+            <CardTitle className="text-lg font-semibold font-sans">Currency Entries</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {isLoadingEntries ? (
-              <div className="py-12 text-center text-muted-foreground">
-                Loading entries...
+            <div className="border-b border-border p-4 sm:p-6">
+              <div className="mb-2 flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                <h3 className="text-base font-semibold">Quick Filters</h3>
               </div>
-            ) : currencyEntries.length > 0 ? (
+              <p className="mb-4 text-sm text-muted-foreground">
+                Filter by table view, category, and date range
+              </p>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <Select value={draftTableView} onValueChange={(value) => setDraftTableView(value as "entries" | "category-wise")}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Select View" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="entries">All Entries</SelectItem>
+                      <SelectItem value="category-wise">Category-wise</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={draftTableCategoryFilter} onValueChange={setDraftTableCategoryFilter}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Select Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.name}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="Uncategorized">Uncategorized</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Popover open={isTableDatePickerOpen} onOpenChange={setIsTableDatePickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start rounded-xl text-left font-normal">
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {draftTableStartDate && draftTableEndDate ? (
+                          `${format(draftTableStartDate, "MMM dd")} - ${format(draftTableEndDate, "MMM dd, yyyy")}`
+                        ) : (
+                          <span>Select Date Range</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto rounded-xl p-0" align="start">
+                      <div className="space-y-4 p-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Start Date</label>
+                          <CalendarComponent
+                            mode="single"
+                            selected={draftTableStartDate}
+                            onSelect={(date) => {
+                              setDraftTableStartDate(date);
+                              if (date && draftTableEndDate && date > draftTableEndDate) {
+                                setDraftTableEndDate(undefined);
+                              }
+                            }}
+                            className="rounded-md border"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">End Date</label>
+                          <CalendarComponent
+                            mode="single"
+                            selected={draftTableEndDate}
+                            onSelect={setDraftTableEndDate}
+                            disabled={(date) => (draftTableStartDate ? date < draftTableStartDate : false)}
+                            className="rounded-md border"
+                          />
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <Button onClick={handleApplyTableFilters} className="w-full rounded-xl">
+                  Apply Filters
+                </Button>
+              </div>
+            </div>
+            {isLoadingEntries ? (
+              <div className="py-12 text-center text-muted-foreground">Loading entries...</div>
+            ) : filteredTableEntries.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   {/* Table Header */}
@@ -914,7 +998,7 @@ export default function India() {
                   {/* Table Body */}
                   <tbody>
                     {entriesTableView === "entries"
-                      ? currencyEntries.map((entry, index) => (
+                      ? filteredTableEntries.map((entry, index) => (
                           <tr
                             key={entry.id}
                             className={cn(
