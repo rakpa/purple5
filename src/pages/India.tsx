@@ -903,16 +903,13 @@ export default function India() {
 
         {/* Currency Entries Table */}
         <Card className="mb-8 rounded-2xl shadow-card overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-lg font-semibold font-sans">Currency Entries</CardTitle>
-          </CardHeader>
           <CardContent className="p-0">
-            <div className="border-b border-border p-4 sm:p-6">
-              <div className="mb-2 flex items-center gap-2">
+            <div className="border-b border-border p-3 sm:p-4">
+              <div className="mb-1 flex items-center gap-2">
                 <Filter className="h-4 w-4" />
                 <h3 className="text-base font-semibold">Quick Filters</h3>
               </div>
-              <p className="mb-4 text-sm text-muted-foreground">
+              <p className="mb-3 text-sm text-muted-foreground">
                 Filter by category and date range
               </p>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
