@@ -234,7 +234,7 @@ export default function Budget() {
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Total Budgeted
                   </p>
-                  <p className="mt-2 text-2xl font-bold text-foreground sm:text-3xl">
+                  <p className="mt-2 text-xl font-semibold text-foreground">
                     {isLoading ? "—" : formatCurrency(summary.totalBudgeted)}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
@@ -255,7 +255,7 @@ export default function Budget() {
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Total Spent
                   </p>
-                  <p className="mt-2 text-2xl font-bold text-foreground sm:text-3xl">
+                  <p className="mt-2 text-xl font-semibold text-foreground">
                     {isLoading ? "—" : formatCurrency(summary.totalSpent)}
                   </p>
                   <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
@@ -277,7 +277,7 @@ export default function Budget() {
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Remaining
                   </p>
-                  <p className="mt-2 text-2xl font-bold text-green-600 sm:text-3xl">
+                  <p className="mt-2 text-xl font-semibold text-green-600">
                     {isLoading ? "—" : formatCurrency(summary.remaining)}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">Available to spend</p>
