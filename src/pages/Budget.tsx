@@ -138,7 +138,7 @@ export default function Budget() {
     return budgets.map((budget) => {
       const spent = spentByCategory.get(budget.category) || 0;
       const limit = Number(budget.amount);
-      const remaining = Math.max(limit - spent, 0);
+      const remaining = limit - spent;
       const percentUsed = limit > 0 ? Math.round((spent / limit) * 100) : 0;
       const status = getBudgetStatus(spent, limit);
       return {
@@ -156,7 +156,7 @@ export default function Budget() {
   const summary = useMemo(() => {
     const totalBudgeted = categoryBudgets.reduce((sum, b) => sum + b.limit, 0);
     const totalSpent = categoryBudgets.reduce((sum, b) => sum + b.spent, 0);
-    const remaining = Math.max(totalBudgeted - totalSpent, 0);
+    const remaining = totalBudgeted - totalSpent;
     const percentOfBudget =
       totalBudgeted > 0 ? Math.round((totalSpent / totalBudgeted) * 100) : 0;
     return { totalBudgeted, totalSpent, remaining, percentOfBudget };
@@ -274,7 +274,14 @@ export default function Budget() {
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                     Remaining
                   </p>
-                  <p className="mt-2 text-xl font-semibold text-green-600">
+                  <p
+                    className={cn(
+                      "mt-2 text-xl font-semibold",
+                      summary.remaining < 0
+                        ? statusStyles.over.remaining
+                        : statusStyles.ok.remaining
+                    )}
+                  >
                     {isLoading ? "—" : formatCurrency(summary.remaining)}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">Available to spend</p>
