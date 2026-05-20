@@ -5,6 +5,7 @@ export interface CategoryBudget {
   amount: number;
   month: number;
   year: number;
+  repeat_monthly: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -14,4 +15,5 @@ export interface CategoryBudgetInsert {
   amount: number;
   month: number;
   year: number;
+  repeat_monthly?: boolean;
 }

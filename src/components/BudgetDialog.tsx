@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -30,6 +31,7 @@ interface BudgetDialogProps {
   year: number;
   preselectedCategory?: string;
   existingAmount?: number;
+  existingRepeatMonthly?: boolean;
 }
 
 export function BudgetDialog({
@@ -40,26 +42,34 @@ export function BudgetDialog({
   year,
   preselectedCategory,
   existingAmount,
+  existingRepeatMonthly,
 }: BudgetDialogProps) {
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
+  const [repeatMonthly, setRepeatMonthly] = useState(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (open) {
       setCategory(preselectedCategory || "");
       setAmount(existingAmount ? String(existingAmount) : "");
+      setRepeatMonthly(existingRepeatMonthly ?? false);
     }
-  }, [open, preselectedCategory, existingAmount]);
+  }, [open, preselectedCategory, existingAmount, existingRepeatMonthly]);
 
   const saveMutation = useMutation({
     mutationFn: upsertBudget,
-    onSuccess: () => {
-      toast.success("Budget saved successfully!");
+    onSuccess: (_, variables) => {
+      toast.success(
+        variables.repeat_monthly
+          ? "Budget saved and will repeat monthly"
+          : "Budget saved successfully!"
+      );
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       onOpenChange(false);
       setCategory("");
       setAmount("");
+      setRepeatMonthly(false);
     },
     onError: (error: Error) => {
       toast.error(`Failed to save budget: ${error.message}`);
@@ -82,6 +92,7 @@ export function BudgetDialog({
       amount: parsed,
       month,
       year,
+      repeat_monthly: repeatMonthly,
     });
   };
 
@@ -122,6 +133,20 @@ export function BudgetDialog({
               onChange={(e) => setAmount(e.target.value)}
               className="rounded-xl"
             />
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="budget-repeat-monthly"
+              checked={repeatMonthly}
+              onCheckedChange={(checked) => setRepeatMonthly(checked === true)}
+              className="h-4 w-4 rounded border-muted-foreground/40 data-[state=checked]:bg-foreground data-[state=checked]:border-foreground data-[state=checked]:text-background"
+            />
+            <Label
+              htmlFor="budget-repeat-monthly"
+              className="text-sm font-normal text-muted-foreground cursor-pointer"
+            >
+              Repeat this budget monthly
+            </Label>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)}>

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS category_budgets (
   amount DECIMAL(10, 2) NOT NULL CHECK (amount > 0),
   month INTEGER NOT NULL CHECK (month >= 1 AND month <= 12),
   year INTEGER NOT NULL CHECK (year >= 2000),
+  repeat_monthly BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id, category, month, year)

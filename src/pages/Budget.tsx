@@ -88,6 +88,7 @@ export default function Budget() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editCategory, setEditCategory] = useState<string | undefined>();
   const [editAmount, setEditAmount] = useState<number | undefined>();
+  const [editRepeatMonthly, setEditRepeatMonthly] = useState<boolean | undefined>();
 
   const periodDate = useMemo(
     () => new Date(selectedPeriod.year, selectedPeriod.month - 1, 1),
@@ -166,9 +167,10 @@ export default function Budget() {
     return { totalBudgeted, totalSpent, remaining, percentOfBudget };
   }, [categoryBudgets]);
 
-  const openNewBudget = (category?: string, amount?: number) => {
+  const openNewBudget = (category?: string, amount?: number, repeatMonthly?: boolean) => {
     setEditCategory(category);
     setEditAmount(amount);
+    setEditRepeatMonthly(repeatMonthly);
     setDialogOpen(true);
   };
 
@@ -324,7 +326,7 @@ export default function Budget() {
                 <Card
                   key={item.id}
                   className="rounded-2xl border-0 shadow-card bg-card cursor-pointer hover:shadow-elevated transition-shadow"
-                  onClick={() => openNewBudget(item.category, item.limit)}
+                  onClick={() => openNewBudget(item.category, item.limit, item.repeat_monthly)}
                 >
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between gap-2 mb-4">
@@ -385,6 +387,7 @@ export default function Budget() {
         year={selectedPeriod.year}
         preselectedCategory={editCategory}
         existingAmount={editAmount}
+        existingRepeatMonthly={editRepeatMonthly}
       />
     </div>
   );
