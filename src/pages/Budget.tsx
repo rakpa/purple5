@@ -5,7 +5,6 @@ import {
   format,
   startOfMonth,
   endOfMonth,
-  subMonths,
 } from "date-fns";
 import {
   Building2,
@@ -68,23 +67,32 @@ const statusStyles: Record<
   },
 };
 
-function buildMonthOptions(count = 12) {
+function buildMonthOptionsForYear(year: number) {
   const options: { label: string; month: number; year: number }[] = [];
-  const now = new Date();
-  for (let i = 0; i < count; i++) {
-    const d = subMonths(now, i);
+  for (let month = 12; month >= 1; month--) {
+    const d = new Date(year, month - 1, 1);
     options.push({
       label: format(d, "MMMM yyyy"),
-      month: d.getMonth() + 1,
-      year: d.getFullYear(),
+      month,
+      year,
     });
   }
   return options;
 }
 
+function getDefaultPeriod(year: number) {
+  const options = buildMonthOptionsForYear(year);
+  const now = new Date();
+  return (
+    options.find((o) => o.month === now.getMonth() + 1 && o.year === year) ?? options[0]
+  );
+}
+
+const BUDGET_YEAR = 2026;
+
 export default function Budget() {
-  const monthOptions = useMemo(() => buildMonthOptions(), []);
-  const [selectedPeriod, setSelectedPeriod] = useState(monthOptions[0]);
+  const monthOptions = useMemo(() => buildMonthOptionsForYear(BUDGET_YEAR), []);
+  const [selectedPeriod, setSelectedPeriod] = useState(() => getDefaultPeriod(BUDGET_YEAR));
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editCategory, setEditCategory] = useState<string | undefined>();
   const [editAmount, setEditAmount] = useState<number | undefined>();
