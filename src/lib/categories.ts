@@ -72,7 +72,7 @@ export async function updateCategory(id: string, data: Partial<CategoryInsert>) 
     throw new Error(error.message);
   }
 
-  // Keep historical transactions consistent when category name changes
+  // Keep historical transactions and budgets consistent when category name changes
   if (data.name && data.name !== currentCategory.name) {
     const { error: transactionsUpdateError } = await supabase
       .from('transactions')
@@ -83,6 +83,18 @@ export async function updateCategory(id: string, data: Partial<CategoryInsert>) 
 
     if (transactionsUpdateError) {
       throw new Error(transactionsUpdateError.message);
+    }
+
+    if (currentCategory.type === 'expense') {
+      const { error: budgetsUpdateError } = await supabase
+        .from('category_budgets')
+        .update({ category: data.name, updated_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .eq('category', currentCategory.name);
+
+      if (budgetsUpdateError && !budgetsUpdateError.message.includes('relation')) {
+        throw new Error(budgetsUpdateError.message);
+      }
     }
   }
 

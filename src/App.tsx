@@ -15,6 +15,7 @@ import Categories from "./pages/Categories";
 import India from "./pages/India";
 import AISummary from "./pages/AISummary";
 import Settings from "./pages/Settings";
+import Budget from "./pages/Budget";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -136,6 +137,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/budget"
+              element={
+                <ProtectedRoute>
+                  <Budget />
                 </ProtectedRoute>
               }
             />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Menu, X, LayoutDashboard, PlusCircle, BarChart3, Globe, Settings, LogOut, MapPin, Sparkles } from "lucide-react";
+import { Menu, X, LayoutDashboard, PlusCircle, BarChart3, Settings, LogOut, MapPin, Sparkles, Wallet } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const navItems = [
   { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
+  { name: "Budget", icon: Wallet, href: "/budget" },
   { name: "Add Expense/Income", icon: PlusCircle, href: "/" },
   { name: "AI Summary", icon: Sparkles, href: "/ai-summary" },
   { name: "Categories", icon: BarChart3, href: "/categories" },
