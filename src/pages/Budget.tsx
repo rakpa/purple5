@@ -69,7 +69,7 @@ const statusStyles: Record<
 
 function buildMonthOptionsForYear(year: number) {
   const options: { label: string; month: number; year: number }[] = [];
-  for (let month = 12; month >= 1; month--) {
+  for (let month = 1; month <= 12; month++) {
     const d = new Date(year, month - 1, 1);
     options.push({
       label: format(d, "MMMM yyyy"),
