@@ -1,12 +1,25 @@
 import { supabase } from './supabase';
 import type { CategoryBudget, CategoryBudgetInsert } from '@/types/budget';
 
+const REPEAT_MIGRATION_SQL =
+  "ALTER TABLE category_budgets ADD COLUMN IF NOT EXISTS repeat_monthly BOOLEAN NOT NULL DEFAULT false;";
+
 async function getCurrentUserId() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     throw new Error('User not authenticated');
   }
   return user.id;
+}
+
+function isMissingRepeatColumn(message?: string) {
+  return !!message?.includes('repeat_monthly');
+}
+
+function repeatMigrationError() {
+  return new Error(
+    `Repeat monthly requires a database update. Open Supabase → SQL Editor, run:\n${REPEAT_MIGRATION_SQL}`
+  );
 }
 
 function periodValue(year: number, month: number) {
@@ -38,6 +51,7 @@ function mergeBudgetsForPeriod(
         ...budget,
         month,
         year,
+        repeat_monthly: true,
       });
     }
   });
@@ -48,36 +62,41 @@ function mergeBudgetsForPeriod(
 export async function getBudgets(month: number, year: number) {
   const userId = await getCurrentUserId();
 
-  const [monthlyResult, recurringResult] = await Promise.all([
-    supabase
-      .from('category_budgets')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('month', month)
-      .eq('year', year)
-      .order('category', { ascending: true }),
-    supabase
-      .from('category_budgets')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('repeat_monthly', true)
-      .order('category', { ascending: true }),
-  ]);
+  const monthlyResult = await supabase
+    .from('category_budgets')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('month', month)
+    .eq('year', year)
+    .order('category', { ascending: true });
 
-  const error = monthlyResult.error || recurringResult.error;
-  if (error) {
-    if (error.code === 'PGRST116' || error.message.includes('relation')) {
+  if (monthlyResult.error) {
+    if (monthlyResult.error.code === 'PGRST116' || monthlyResult.error.message.includes('relation')) {
       throw new Error('Budget table not found. Please run supabase-budgets-setup.sql in your Supabase dashboard.');
     }
-    if (error.message.includes('repeat_monthly')) {
-      throw new Error('Please run supabase-budgets-repeat-migration.sql in your Supabase dashboard.');
-    }
-    throw new Error(error.message);
+    throw new Error(monthlyResult.error.message);
   }
 
-  const explicit = (monthlyResult.data || []) as CategoryBudget[];
-  const recurring = (recurringResult.data || []) as CategoryBudget[];
+  const explicit = (monthlyResult.data || []).map((b) => ({
+    ...b,
+    repeat_monthly: b.repeat_monthly ?? false,
+  })) as CategoryBudget[];
 
+  const recurringResult = await supabase
+    .from('category_budgets')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('repeat_monthly', true)
+    .order('category', { ascending: true });
+
+  if (recurringResult.error) {
+    if (isMissingRepeatColumn(recurringResult.error.message)) {
+      return explicit;
+    }
+    throw new Error(recurringResult.error.message);
+  }
+
+  const recurring = (recurringResult.data || []) as CategoryBudget[];
   return mergeBudgetsForPeriod(explicit, recurring, month, year);
 }
 
@@ -93,30 +112,51 @@ export async function upsertBudget(data: CategoryBudgetInsert) {
       .eq('category', data.category)
       .eq('repeat_monthly', true);
 
+    if (clearError && isMissingRepeatColumn(clearError.message)) {
+      throw repeatMigrationError();
+    }
     if (clearError) {
       throw new Error(clearError.message);
     }
   }
 
-  const { data: budget, error } = await supabase
+  const row = {
+    category: data.category,
+    amount: data.amount,
+    month: data.month,
+    year: data.year,
+    repeat_monthly: repeatMonthly,
+    user_id: userId,
+    updated_at: new Date().toISOString(),
+  };
+
+  let result = await supabase
     .from('category_budgets')
-    .upsert(
-      {
-        ...data,
-        repeat_monthly: repeatMonthly,
-        user_id: userId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,category,month,year' }
-    )
+    .upsert(row, { onConflict: 'user_id,category,month,year' })
     .select()
     .single();
 
-  if (error) {
-    throw new Error(error.message);
+  if (result.error && isMissingRepeatColumn(result.error.message)) {
+    if (repeatMonthly) {
+      throw repeatMigrationError();
+    }
+
+    const { repeat_monthly: _removed, ...rowWithoutRepeat } = row;
+    result = await supabase
+      .from('category_budgets')
+      .upsert(rowWithoutRepeat, { onConflict: 'user_id,category,month,year' })
+      .select()
+      .single();
   }
 
-  return budget as CategoryBudget;
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+
+  return {
+    ...result.data,
+    repeat_monthly: result.data.repeat_monthly ?? false,
+  } as CategoryBudget;
 }
 
 export async function deleteBudget(id: string) {

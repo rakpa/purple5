@@ -72,7 +72,10 @@ export function BudgetDialog({
       setRepeatMonthly(false);
     },
     onError: (error: Error) => {
-      toast.error(`Failed to save budget: ${error.message}`);
+      const msg = error.message.includes("Repeat monthly requires")
+        ? error.message
+        : `Failed to save budget: ${error.message}`;
+      toast.error(msg, { duration: 8000 });
     },
   });
 
