@@ -32,15 +32,12 @@ import { getBudgets } from "@/lib/budgets";
 import { getCategories } from "@/lib/categories";
 import { cn, capitalizeFirst, formatCurrency } from "@/lib/utils";
 
-type BudgetStatus = "over" | "match" | "under";
+type BudgetStatus = "over" | "ok";
 
-/** Over budget → red, on target (matches) → green, under budget → yellow */
+/** Over budget → red; at or under budget → green */
 function getBudgetStatus(spent: number, limit: number): BudgetStatus {
-  if (limit <= 0) return "under";
-  if (spent > limit) return "over";
-  const percentUsed = (spent / limit) * 100;
-  if (percentUsed >= 85) return "match";
-  return "under";
+  if (limit <= 0) return spent > 0 ? "over" : "ok";
+  return spent > limit ? "over" : "ok";
 }
 
 const statusStyles: Record<
@@ -51,13 +48,9 @@ const statusStyles: Record<
     remaining: "text-red-600",
     progressClass: "[&>div]:bg-red-500",
   },
-  match: {
+  ok: {
     remaining: "text-green-600",
     progressClass: "[&>div]:bg-green-500",
-  },
-  under: {
-    remaining: "text-yellow-600",
-    progressClass: "[&>div]:bg-yellow-500",
   },
 };
 
