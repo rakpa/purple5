@@ -32,38 +32,32 @@ import { getBudgets } from "@/lib/budgets";
 import { getCategories } from "@/lib/categories";
 import { cn, capitalizeFirst, formatCurrency } from "@/lib/utils";
 
-type BudgetStatus = "danger" | "warning" | "healthy" | "moderate";
+type BudgetStatus = "over" | "match" | "under";
 
-function getBudgetStatus(percentUsed: number): BudgetStatus {
-  if (percentUsed >= 90) return "danger";
-  if (percentUsed >= 75) return "warning";
-  if (percentUsed <= 60) return "healthy";
-  return "moderate";
+/** Over budget → red, on target (matches) → green, under budget → yellow */
+function getBudgetStatus(spent: number, limit: number): BudgetStatus {
+  if (limit <= 0) return "under";
+  if (spent > limit) return "over";
+  const percentUsed = (spent / limit) * 100;
+  if (percentUsed >= 85) return "match";
+  return "under";
 }
 
 const statusStyles: Record<
   BudgetStatus,
-  { bar: string; remaining: string; progressClass: string }
+  { remaining: string; progressClass: string }
 > = {
-  danger: {
-    bar: "bg-red-500",
+  over: {
     remaining: "text-red-600",
     progressClass: "[&>div]:bg-red-500",
   },
-  warning: {
-    bar: "bg-foreground",
-    remaining: "text-foreground",
-    progressClass: "[&>div]:bg-foreground",
-  },
-  healthy: {
-    bar: "bg-green-500",
+  match: {
     remaining: "text-green-600",
     progressClass: "[&>div]:bg-green-500",
   },
-  moderate: {
-    bar: "bg-teal-500",
-    remaining: "text-green-600",
-    progressClass: "[&>div]:bg-teal-500",
+  under: {
+    remaining: "text-yellow-600",
+    progressClass: "[&>div]:bg-yellow-500",
   },
 };
 
@@ -152,8 +146,8 @@ export default function Budget() {
       const spent = spentByCategory.get(budget.category) || 0;
       const limit = Number(budget.amount);
       const remaining = Math.max(limit - spent, 0);
-      const percentUsed = limit > 0 ? Math.min(Math.round((spent / limit) * 100), 100) : 0;
-      const status = getBudgetStatus(percentUsed);
+      const percentUsed = limit > 0 ? Math.round((spent / limit) * 100) : 0;
+      const status = getBudgetStatus(spent, limit);
       return {
         ...budget,
         spent,
@@ -361,7 +355,7 @@ export default function Budget() {
                       </span>
                     </div>
                     <Progress
-                      value={item.percentUsed}
+                      value={Math.min(item.percentUsed, 100)}
                       className={cn("h-2 bg-muted", styles.progressClass)}
                     />
                   </CardContent>
