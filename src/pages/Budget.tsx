@@ -135,22 +135,28 @@ export default function Budget() {
   }, [transactions]);
 
   const categoryBudgets = useMemo(() => {
-    return budgets.map((budget) => {
-      const spent = spentByCategory.get(budget.category) || 0;
-      const limit = Number(budget.amount);
-      const remaining = limit - spent;
-      const percentUsed = limit > 0 ? Math.round((spent / limit) * 100) : 0;
-      const status = getBudgetStatus(spent, limit);
-      return {
-        ...budget,
-        spent,
-        limit,
-        remaining,
-        percentUsed,
-        status,
-        icon: categoryIconMap.get(budget.category.trim().toLowerCase()) || "Circle",
-      };
-    });
+    return budgets
+      .map((budget) => {
+        const spent = spentByCategory.get(budget.category) || 0;
+        const limit = Number(budget.amount);
+        const remaining = limit - spent;
+        const percentUsed = limit > 0 ? Math.round((spent / limit) * 100) : 0;
+        const status = getBudgetStatus(spent, limit);
+        return {
+          ...budget,
+          spent,
+          limit,
+          remaining,
+          percentUsed,
+          status,
+          icon: categoryIconMap.get(budget.category.trim().toLowerCase()) || "Circle",
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.limit - a.limit ||
+          a.category.localeCompare(b.category, undefined, { sensitivity: "base" })
+      );
   }, [budgets, spentByCategory, categoryIconMap]);
 
   const summary = useMemo(() => {
