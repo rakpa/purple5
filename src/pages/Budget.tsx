@@ -7,13 +7,14 @@ import {
   endOfMonth,
 } from "date-fns";
 import {
-  Building2,
   ShoppingCart,
   Calendar,
   ChevronDown,
   Plus,
   TrendingUp,
+  TrendingDown,
   Trash2,
+  PiggyBank,
 } from "lucide-react";
 import { Navigation } from "@/components/Navigation";
 import { BudgetDialog } from "@/components/BudgetDialog";
@@ -77,6 +78,7 @@ function getDefaultPeriod(year: number) {
 }
 
 const BUDGET_YEAR = 2026;
+const SAVINGS_CATEGORY_KEY = "savings";
 
 export default function Budget() {
   const monthOptions = useMemo(() => buildMonthOptionsForYear(BUDGET_YEAR), []);
@@ -163,13 +165,24 @@ export default function Budget() {
   }, [budgets, spentByCategory, categoryIconMap]);
 
   const summary = useMemo(() => {
-    const totalBudgeted = categoryBudgets.reduce((sum, b) => sum + b.limit, 0);
-    const totalSpent = categoryBudgets.reduce((sum, b) => sum + b.spent, 0);
-    const remaining = totalBudgeted - totalSpent;
-    const percentOfBudget =
-      totalBudgeted > 0 ? Math.round((totalSpent / totalBudgeted) * 100) : 0;
-    return { totalBudgeted, totalSpent, remaining, percentOfBudget };
-  }, [categoryBudgets]);
+    const totalIncome = transactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    const totalSpent = transactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    const totalSavings = transactions
+      .filter((t) => normalizeCategoryKey(t.category) === SAVINGS_CATEGORY_KEY)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    const remaining = totalIncome - totalSpent - totalSavings;
+    const percentOfIncome =
+      totalIncome > 0 ? Math.round((totalSpent / totalIncome) * 100) : 0;
+
+    return { totalIncome, totalSpent, totalSavings, remaining, percentOfIncome };
+  }, [transactions]);
 
   const openNewBudget = (category?: string, amount?: number, repeatMonthly?: boolean) => {
     setEditCategory(category);
@@ -253,23 +266,23 @@ export default function Budget() {
         </div>
 
         {/* Summary cards */}
-        <div className="mb-8 grid gap-4 sm:grid-cols-3">
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="rounded-2xl border-0 shadow-card bg-card">
             <CardContent className="p-5 sm:p-6">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Total Budgeted
+                    Total Income
                   </p>
                   <p className="mt-2 text-xl font-semibold text-foreground">
-                    {isLoading ? "—" : formatCurrency(summary.totalBudgeted)}
+                    {isLoading ? "—" : formatCurrency(summary.totalIncome)}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Target across all categories
+                    All income for {selectedPeriod.label}
                   </p>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                  <Building2 className="h-5 w-5 text-muted-foreground" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
                 </div>
               </div>
             </CardContent>
@@ -286,12 +299,33 @@ export default function Budget() {
                     {isLoading ? "—" : formatCurrency(summary.totalSpent)}
                   </p>
                   <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
-                    <TrendingUp className="h-3 w-3 text-green-600" />
-                    {summary.percentOfBudget}% of total budget
+                    <TrendingDown className="h-3 w-3 text-red-600" />
+                    {summary.percentOfIncome}% of total income
                   </p>
                 </div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
                   <ShoppingCart className="h-5 w-5 text-muted-foreground" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-0 shadow-card bg-card">
+            <CardContent className="p-5 sm:p-6">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Total Savings
+                  </p>
+                  <p className="mt-2 text-xl font-semibold text-foreground">
+                    {isLoading ? "—" : formatCurrency(summary.totalSavings)}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Savings category this month
+                  </p>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-100">
+                  <PiggyBank className="h-5 w-5 text-pink-600" />
                 </div>
               </div>
             </CardContent>
@@ -313,7 +347,9 @@ export default function Budget() {
                 >
                   {isLoading ? "—" : formatCurrency(summary.remaining)}
                 </p>
-                <p className="mt-2 text-xs text-muted-foreground">Available to spend</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Income minus expenses and savings
+                </p>
               </div>
             </CardContent>
           </Card>
