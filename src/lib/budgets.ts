@@ -58,7 +58,11 @@ function mergeBudgetsForPeriod(
     }
   });
 
-  return merged.sort((a, b) => a.category.localeCompare(b.category));
+  return merged.sort((a, b) => {
+    const byAmountHighToLow = Number(b.amount) - Number(a.amount);
+    if (byAmountHighToLow !== 0) return byAmountHighToLow;
+    return a.category.localeCompare(b.category, undefined, { sensitivity: "base" });
+  });
 }
 
 export async function getBudgets(month: number, year: number) {

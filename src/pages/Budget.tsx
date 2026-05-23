@@ -9,7 +9,6 @@ import {
 import {
   Building2,
   ShoppingCart,
-  Wallet,
   Calendar,
   ChevronDown,
   Plus,
@@ -156,11 +155,11 @@ export default function Budget() {
           icon: categoryIconMap.get(budget.category.trim().toLowerCase()) || "Circle",
         };
       })
-      .sort(
-        (a, b) =>
-          b.limit - a.limit ||
-          a.category.localeCompare(b.category, undefined, { sensitivity: "base" })
-      );
+      .sort((a, b) => {
+        const byBudgetHighToLow = Number(b.amount) - Number(a.amount);
+        if (byBudgetHighToLow !== 0) return byBudgetHighToLow;
+        return a.category.localeCompare(b.category, undefined, { sensitivity: "base" });
+      });
   }, [budgets, spentByCategory, categoryIconMap]);
 
   const summary = useMemo(() => {
@@ -298,8 +297,8 @@ export default function Budget() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-0 shadow-card bg-card relative overflow-hidden">
-            <CardContent className="p-5 sm:p-6 relative z-10">
+          <Card className="rounded-2xl border-0 shadow-card bg-card">
+            <CardContent className="p-5 sm:p-6">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Remaining
@@ -317,7 +316,6 @@ export default function Budget() {
                 <p className="mt-2 text-xs text-muted-foreground">Available to spend</p>
               </div>
             </CardContent>
-            <Wallet className="absolute -bottom-4 -right-4 h-24 w-24 text-green-100/80 pointer-events-none" />
           </Card>
         </div>
 
