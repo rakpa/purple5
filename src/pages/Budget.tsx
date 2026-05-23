@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   format,
   startOfMonth,
@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Plus,
   TrendingUp,
+  Trash2,
 } from "lucide-react";
 import { Navigation } from "@/components/Navigation";
 import { BudgetDialog } from "@/components/BudgetDialog";
@@ -28,9 +29,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
 import { getTransactions } from "@/lib/transactions";
-import { getBudgets } from "@/lib/budgets";
+import { getBudgets, deleteBudget } from "@/lib/budgets";
 import { getCategories } from "@/lib/categories";
 import { cn, capitalizeFirst, formatCurrency, normalizeCategoryKey } from "@/lib/utils";
+import { toast } from "sonner";
 
 type BudgetStatus = "over" | "ok";
 
@@ -84,6 +86,8 @@ export default function Budget() {
   const [editCategory, setEditCategory] = useState<string | undefined>();
   const [editAmount, setEditAmount] = useState<number | undefined>();
   const [editRepeatMonthly, setEditRepeatMonthly] = useState<boolean | undefined>();
+
+  const queryClient = useQueryClient();
 
   const periodDate = useMemo(
     () => new Date(selectedPeriod.year, selectedPeriod.month - 1, 1),
@@ -173,6 +177,27 @@ export default function Budget() {
     setEditAmount(amount);
     setEditRepeatMonthly(repeatMonthly);
     setDialogOpen(true);
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteBudget,
+    onSuccess: () => {
+      toast.success("Budget removed");
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to remove budget: ${error.message}`);
+    },
+  });
+
+  const handleDeleteBudget = (id: string, category: string) => {
+    if (
+      confirm(
+        `Remove the ${capitalizeFirst(category)} budget for ${selectedPeriod.label}? This does not delete your transactions.`
+      )
+    ) {
+      deleteMutation.mutate(id);
+    }
   };
 
   const isLoading = transactionsLoading || budgetsLoading;
@@ -275,26 +300,21 @@ export default function Budget() {
 
           <Card className="rounded-2xl border-0 shadow-card bg-card relative overflow-hidden">
             <CardContent className="p-5 sm:p-6 relative z-10">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Remaining
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-2 text-xl font-semibold",
-                      summary.remaining < 0
-                        ? statusStyles.over.remaining
-                        : statusStyles.ok.remaining
-                    )}
-                  >
-                    {isLoading ? "—" : formatCurrency(summary.remaining)}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">Available to spend</p>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                  <Wallet className="h-5 w-5 text-green-600" />
-                </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Remaining
+                </p>
+                <p
+                  className={cn(
+                    "mt-2 text-xl font-semibold",
+                    summary.remaining < 0
+                      ? statusStyles.over.remaining
+                      : statusStyles.ok.remaining
+                  )}
+                >
+                  {isLoading ? "—" : formatCurrency(summary.remaining)}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">Available to spend</p>
               </div>
             </CardContent>
             <Wallet className="absolute -bottom-4 -right-4 h-24 w-24 text-green-100/80 pointer-events-none" />
@@ -333,11 +353,25 @@ export default function Budget() {
               return (
                 <Card
                   key={item.id}
-                  className="rounded-2xl border-0 shadow-card bg-card cursor-pointer hover:shadow-elevated transition-shadow"
+                  className="group relative rounded-2xl border-0 shadow-card bg-card cursor-pointer hover:shadow-elevated transition-shadow"
                   onClick={() => openNewBudget(item.category, item.limit, item.repeat_monthly)}
                 >
                   <CardContent className="p-5">
-                    <div className="flex items-start justify-between gap-2 mb-4">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-3 right-3 h-8 w-8 text-muted-foreground opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:text-destructive transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteBudget(item.id, item.category);
+                      }}
+                      disabled={deleteMutation.isPending}
+                      aria-label={`Remove ${item.category} budget`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <div className="flex items-start justify-between gap-2 mb-4 pr-8">
                       <div className="flex items-center gap-3 min-w-0">
                         <CategoryIcon iconName={item.icon} size={18} />
                         <span className="font-semibold text-foreground truncate">
