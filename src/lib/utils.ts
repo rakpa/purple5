@@ -16,3 +16,18 @@ export function formatCurrency(amount: number): string {
     maximumFractionDigits: 2,
   })} PLN`;
 }
+
+/** Case-insensitive key for matching transaction categories to budgets */
+export function normalizeCategoryKey(category: string): string {
+  return category.trim().toLowerCase();
+}
+
+/** Prefer the name stored on the user's category list (avoids budget/txn mismatches) */
+export function resolveCanonicalCategoryName(
+  category: string,
+  categories: { name: string }[]
+): string {
+  const key = normalizeCategoryKey(category);
+  const match = categories.find((c) => normalizeCategoryKey(c.name) === key);
+  return match?.name.trim() ?? category.trim();
+}

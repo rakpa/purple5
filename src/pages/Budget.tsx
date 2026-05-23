@@ -30,7 +30,7 @@ import { Progress } from "@/components/ui/progress";
 import { getTransactions } from "@/lib/transactions";
 import { getBudgets } from "@/lib/budgets";
 import { getCategories } from "@/lib/categories";
-import { cn, capitalizeFirst, formatCurrency } from "@/lib/utils";
+import { cn, capitalizeFirst, formatCurrency, normalizeCategoryKey } from "@/lib/utils";
 
 type BudgetStatus = "over" | "ok";
 
@@ -128,7 +128,7 @@ export default function Budget() {
     transactions
       .filter((t) => t.type === "expense")
       .forEach((t) => {
-        const key = t.category.trim();
+        const key = normalizeCategoryKey(t.category);
         map.set(key, (map.get(key) || 0) + Number(t.amount));
       });
     return map;
@@ -137,7 +137,7 @@ export default function Budget() {
   const categoryBudgets = useMemo(() => {
     return budgets
       .map((budget) => {
-        const spent = spentByCategory.get(budget.category) || 0;
+        const spent = spentByCategory.get(normalizeCategoryKey(budget.category)) || 0;
         const limit = Number(budget.amount);
         const remaining = limit - spent;
         const percentUsed = limit > 0 ? Math.round((spent / limit) * 100) : 0;

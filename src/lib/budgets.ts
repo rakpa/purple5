@@ -1,4 +1,6 @@
 import { supabase } from './supabase';
+import { getCategories } from './categories';
+import { normalizeCategoryKey, resolveCanonicalCategoryName } from './utils';
 import type { CategoryBudget, CategoryBudgetInsert } from '@/types/budget';
 
 const REPEAT_MIGRATION_SQL =
@@ -33,7 +35,7 @@ function mergeBudgetsForPeriod(
   year: number
 ): CategoryBudget[] {
   const targetPeriod = periodValue(year, month);
-  const explicitCategories = new Set(explicit.map((b) => b.category));
+  const explicitCategories = new Set(explicit.map((b) => normalizeCategoryKey(b.category)));
   const merged = [...explicit];
 
   const recurringByCategory = new Map<string, CategoryBudget>();
@@ -41,12 +43,12 @@ function mergeBudgetsForPeriod(
     .sort((a, b) => periodValue(b.year, b.month) - periodValue(a.year, a.month))
     .forEach((budget) => {
       if (periodValue(budget.year, budget.month) <= targetPeriod) {
-        recurringByCategory.set(budget.category, budget);
+        recurringByCategory.set(normalizeCategoryKey(budget.category), budget);
       }
     });
 
   recurringByCategory.forEach((budget) => {
-    if (!explicitCategories.has(budget.category)) {
+    if (!explicitCategories.has(normalizeCategoryKey(budget.category))) {
       merged.push({
         ...budget,
         month,
@@ -103,13 +105,15 @@ export async function getBudgets(month: number, year: number) {
 export async function upsertBudget(data: CategoryBudgetInsert) {
   const userId = await getCurrentUserId();
   const repeatMonthly = data.repeat_monthly ?? false;
+  const expenseCategories = await getCategories('expense');
+  const category = resolveCanonicalCategoryName(data.category, expenseCategories);
 
   if (repeatMonthly) {
     const { error: clearError } = await supabase
       .from('category_budgets')
       .update({ repeat_monthly: false, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
-      .eq('category', data.category)
+      .eq('category', category)
       .eq('repeat_monthly', true);
 
     if (clearError && isMissingRepeatColumn(clearError.message)) {
@@ -121,7 +125,7 @@ export async function upsertBudget(data: CategoryBudgetInsert) {
   }
 
   const row = {
-    category: data.category,
+    category,
     amount: data.amount,
     month: data.month,
     year: data.year,

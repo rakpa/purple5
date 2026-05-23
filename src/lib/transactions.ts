@@ -1,4 +1,6 @@
 import { supabase } from './supabase';
+import { getCategories } from './categories';
+import { resolveCanonicalCategoryName } from './utils';
 import type { Transaction, TransactionInsert } from '@/types/transaction';
 
 async function getCurrentUserId() {
@@ -11,9 +13,11 @@ async function getCurrentUserId() {
 
 export async function createTransaction(data: TransactionInsert) {
   const userId = await getCurrentUserId();
+  const categories = await getCategories(data.type);
+  const category = resolveCanonicalCategoryName(data.category, categories);
   const { data: transaction, error } = await supabase
     .from('transactions')
-    .insert([{ ...data, user_id: userId }])
+    .insert([{ ...data, category, user_id: userId }])
     .select()
     .single();
 
@@ -69,9 +73,26 @@ export async function getTransactions(filters?: {
 
 export async function updateTransaction(id: string, data: Partial<TransactionInsert>) {
   const userId = await getCurrentUserId();
+  const payload = { ...data, updated_at: new Date().toISOString() };
+  if (data.category !== undefined && data.type !== undefined) {
+    const categories = await getCategories(data.type);
+    payload.category = resolveCanonicalCategoryName(data.category, categories);
+  } else if (data.category !== undefined) {
+    const { data: existing, error: existingError } = await supabase
+      .from('transactions')
+      .select('type')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+    if (existingError) {
+      throw new Error(existingError.message);
+    }
+    const categories = await getCategories(existing.type);
+    payload.category = resolveCanonicalCategoryName(data.category, categories);
+  }
   const { data: transaction, error } = await supabase
     .from('transactions')
-    .update({ ...data, updated_at: new Date().toISOString() })
+    .update(payload)
     .eq('id', id)
     .eq('user_id', userId)
     .select()
