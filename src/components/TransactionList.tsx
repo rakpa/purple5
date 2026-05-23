@@ -101,9 +101,10 @@ export function TransactionList() {
   });
 
   const filteredTransactions = transactions.filter((transaction) => {
+    const categoryLabel = transaction.category ?? "";
     const matchesSearch =
       (transaction.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        transaction.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        categoryLabel.toLowerCase().includes(searchQuery.toLowerCase())) ||
       searchQuery === "";
 
     const matchesFilter =

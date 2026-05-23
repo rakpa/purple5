@@ -18,8 +18,8 @@ export function formatCurrency(amount: number): string {
 }
 
 /** Case-insensitive key for matching transaction categories to budgets */
-export function normalizeCategoryKey(category: string): string {
-  return category.trim().toLowerCase();
+export function normalizeCategoryKey(category: string | null | undefined): string {
+  return (category ?? "").trim().toLowerCase();
 }
 
 /** Prefer the name stored on the user's category list (avoids budget/txn mismatches) */

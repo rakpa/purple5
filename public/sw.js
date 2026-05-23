@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'finance-2-v3';
+const CACHE_NAME = 'finance-2-v4';
 const STATIC_CACHE = [
   '/',
   '/manifest.json',
@@ -64,35 +64,51 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle static assets (JS, CSS, images, etc.) - Cache First strategy
+  const isScriptOrStyle =
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.includes('/assets/');
+
+  // JS/CSS: network-first so deploys never serve stale bundles (avoids blank page)
+  if (isScriptOrStyle) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200 && response.type === 'basic') {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, responseToCache);
+            });
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Images and other static assets - cache first
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse;
       }
       return fetch(request).then((response) => {
-        // Only cache successful responses
         if (!response || response.status !== 200 || response.type !== 'basic') {
           return response;
         }
-        // Clone the response
         const responseToCache = response.clone();
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(request, responseToCache);
         });
         return response;
       }).catch(() => {
-        // If it's an image, return a placeholder
         if (request.destination === 'image') {
           return caches.match('/icon-192.png').then((icon) => {
             return icon || new Response('', { status: 404 });
           });
         }
-        // For other assets, return offline response
-        return new Response('Offline', { 
-          status: 503,
-          headers: { 'Content-Type': 'text/plain' }
-        });
+        return new Response('', { status: 404 });
       });
     })
   );
