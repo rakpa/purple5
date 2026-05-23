@@ -15,6 +15,7 @@ import {
   TrendingDown,
   Trash2,
   PiggyBank,
+  Wallet,
 } from "lucide-react";
 import { Navigation } from "@/components/Navigation";
 import { BudgetDialog } from "@/components/BudgetDialog";
@@ -180,8 +181,20 @@ export default function Budget() {
     const remaining = totalIncome - totalSpent - totalSavings;
     const percentOfIncome =
       totalIncome > 0 ? Math.round((totalSpent / totalIncome) * 100) : 0;
+    const percentSavings =
+      totalIncome > 0 ? Math.round((totalSavings / totalIncome) * 100) : 0;
+    const percentRemaining =
+      totalIncome > 0 ? Math.round((remaining / totalIncome) * 100) : 0;
 
-    return { totalIncome, totalSpent, totalSavings, remaining, percentOfIncome };
+    return {
+      totalIncome,
+      totalSpent,
+      totalSavings,
+      remaining,
+      percentOfIncome,
+      percentSavings,
+      percentRemaining,
+    };
   }, [transactions]);
 
   const openNewBudget = (category?: string, amount?: number, repeatMonthly?: boolean) => {
@@ -321,7 +334,7 @@ export default function Budget() {
                     {isLoading ? "—" : formatCurrency(summary.totalSavings)}
                   </p>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Savings category this month
+                    {summary.percentSavings}% of total income
                   </p>
                 </div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-pink-100">
@@ -333,23 +346,45 @@ export default function Budget() {
 
           <Card className="rounded-2xl border-0 shadow-card bg-card">
             <CardContent className="p-5 sm:p-6">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Remaining
-                </p>
-                <p
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Remaining
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-2 text-xl font-semibold",
+                      summary.remaining < 0
+                        ? statusStyles.over.remaining
+                        : statusStyles.ok.remaining
+                    )}
+                  >
+                    {isLoading ? "—" : formatCurrency(summary.remaining)}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-2 text-xs",
+                      summary.percentRemaining < 0
+                        ? "text-red-600"
+                        : "text-green-600"
+                    )}
+                  >
+                    {summary.percentRemaining}% of total income
+                  </p>
+                </div>
+                <div
                   className={cn(
-                    "mt-2 text-xl font-semibold",
-                    summary.remaining < 0
-                      ? statusStyles.over.remaining
-                      : statusStyles.ok.remaining
+                    "flex h-10 w-10 items-center justify-center rounded-full",
+                    summary.remaining < 0 ? "bg-red-100" : "bg-green-100"
                   )}
                 >
-                  {isLoading ? "—" : formatCurrency(summary.remaining)}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Income minus expenses and savings
-                </p>
+                  <Wallet
+                    className={cn(
+                      "h-5 w-5",
+                      summary.remaining < 0 ? "text-red-600" : "text-green-600"
+                    )}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
