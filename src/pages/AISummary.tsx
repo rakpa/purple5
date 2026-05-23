@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { formatCurrency, cn, capitalizeFirst } from "@/lib/utils";
+import { formatCurrency, cn, capitalizeFirst, normalizeCategoryKey } from "@/lib/utils";
 import { formatPLN, formatINR } from "@/lib/currency-format";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +24,78 @@ interface QueryResult {
   count: number;
   type: "expense" | "income" | "both";
   category?: string;
+  excludeCategories?: string[];
   period: string;
   query: string;
   transactions?: Transaction[];
+}
+
+const CATEGORY_EXCLUSION_PATTERNS = [
+  /\bexcept\s+([^,.]+)/i,
+  /\bexcluding\s+([^,.]+)/i,
+  /\bwithout\s+([^,.]+)/i,
+  /\bnot\s+including\s+([^,.]+)/i,
+  /\bother\s+than\s+([^,.]+)/i,
+  /\bbesides\s+([^,.]+)/i,
+];
+
+function matchCategoryInText(text: string, availableCategories: string[]): string | undefined {
+  const lowerText = text.toLowerCase();
+  const queryWords = lowerText.split(/\s+/).filter((w) => w.length > 2);
+  const sortedCategories = [...availableCategories].sort((a, b) => b.length - a.length);
+
+  for (const category of sortedCategories) {
+    if (lowerText.includes(category.toLowerCase())) {
+      return category;
+    }
+  }
+
+  for (const category of sortedCategories) {
+    const categoryWords = category
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 2);
+    if (categoryWords.length > 0) {
+      const allWordsMatch = categoryWords.every((catWord) =>
+        queryWords.some(
+          (qWord) => qWord === catWord || qWord.includes(catWord) || catWord.includes(qWord)
+        )
+      );
+      if (allWordsMatch) {
+        return category;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function parseExcludedCategories(
+  lowerQuery: string,
+  availableCategories: string[]
+): string[] {
+  const excluded: string[] = [];
+
+  for (const pattern of CATEGORY_EXCLUSION_PATTERNS) {
+    const match = lowerQuery.match(pattern);
+    if (match) {
+      const clause = match[1].replace(/\bcategories?\b/gi, "").trim();
+      const matched = matchCategoryInText(clause, availableCategories);
+      if (matched && !excluded.includes(matched)) {
+        excluded.push(matched);
+      }
+    }
+  }
+
+  return excluded;
+}
+
+function stripExclusionClauses(query: string): string {
+  let stripped = query;
+  for (const pattern of CATEGORY_EXCLUSION_PATTERNS) {
+    stripped = stripped.replace(pattern, "");
+  }
+  return stripped.replace(/\s+/g, " ").replace(/,\s*$/, "").trim();
 }
 
 export default function AISummary() {
@@ -51,68 +120,46 @@ export default function AISummary() {
   // Parse natural language query
   const parseQuery = (userQuery: string, availableCategories: string[]): { filters: any; queryInfo: QueryResult } | null => {
     const lowerQuery = userQuery.toLowerCase();
-    
+    const excludeCategories = parseExcludedCategories(lowerQuery, availableCategories);
+    const lowerQueryForInclude = stripExclusionClauses(lowerQuery);
+
     // Determine transaction type
     let type: "expense" | "income" | undefined = undefined;
-    if (lowerQuery.includes("spent") || lowerQuery.includes("expense") || lowerQuery.includes("cost")) {
+    if (
+      lowerQuery.includes("spent") ||
+      lowerQuery.includes("expense") ||
+      lowerQuery.includes("cost")
+    ) {
       type = "expense";
-    } else if (lowerQuery.includes("earned") || lowerQuery.includes("income") || lowerQuery.includes("received")) {
+    } else if (
+      lowerQuery.includes("earned") ||
+      lowerQuery.includes("income") ||
+      lowerQuery.includes("received")
+    ) {
       type = "income";
     }
 
-    // Match against actual categories from database - prioritize exact matches
-    let matchedCategory: string | undefined = undefined;
-    const queryWords = lowerQuery.split(/\s+/).filter(w => w.length > 2);
-    
-    // First, try exact phrase matching (e.g., "poland rent" should match "Poland Rent")
-    // Sort categories by length (longer first) to match more specific categories first
-    const sortedCategories = [...availableCategories].sort((a, b) => b.length - a.length);
-    
-    for (const category of sortedCategories) {
-      const lowerCategory = category.toLowerCase();
-      // Check if query contains the full category name as a phrase
-      if (lowerQuery.includes(lowerCategory)) {
-        matchedCategory = category;
-        break;
-      }
-    }
-    
-    // If no exact phrase match, try word-by-word matching (all category words must be in query)
-    if (!matchedCategory) {
-      for (const category of sortedCategories) {
-        const lowerCategory = category.toLowerCase();
-        const categoryWords = lowerCategory.split(/\s+/).filter(w => w.length > 2);
-        // Check if all significant words from category are present in query
-        if (categoryWords.length > 0) {
-          const allWordsMatch = categoryWords.every(catWord => 
-            queryWords.some(qWord => qWord === catWord || qWord.includes(catWord) || catWord.includes(qWord))
-          );
-          if (allWordsMatch) {
-            matchedCategory = category;
-            break;
-          }
-        }
-      }
-    }
+    // Match include category only from the query text outside exclusion clauses
+    let matchedCategory = matchCategoryInText(lowerQueryForInclude, availableCategories);
 
     // Fallback to keyword matching if no exact category match
     if (!matchedCategory) {
       const categoryKeywords: { [key: string]: string[] } = {
-        "rent": ["rent", "rental"],
-        "groceries": ["grocery", "groceries", "food"],
-        "transport": ["transport", "taxi", "uber", "bolt"],
-        "subscriptions": ["subscription", "subscriptions"],
-        "bills": ["bill", "bills", "utility"],
-        "entertainment": ["entertainment", "movie", "cinema"],
-        "health": ["health", "medical", "doctor"],
-        "education": ["education", "school", "learning"],
+        rent: ["rent", "rental"],
+        groceries: ["grocery", "groceries", "food"],
+        transport: ["transport", "taxi", "uber", "bolt"],
+        subscriptions: ["subscription", "subscriptions"],
+        bills: ["bill", "bills", "utility"],
+        entertainment: ["entertainment", "movie", "cinema"],
+        health: ["health", "medical", "doctor"],
+        education: ["education", "school", "learning"],
       };
 
       for (const [category, keywords] of Object.entries(categoryKeywords)) {
-        if (keywords.some(keyword => lowerQuery.includes(keyword))) {
-          // Try to find a matching category in the database
-          const found = availableCategories.find(cat => 
-            cat.toLowerCase().includes(category) || category.includes(cat.toLowerCase())
+        if (keywords.some((keyword) => lowerQueryForInclude.includes(keyword))) {
+          const found = availableCategories.find(
+            (cat) =>
+              cat.toLowerCase().includes(category) || category.includes(cat.toLowerCase())
           );
           if (found) {
             matchedCategory = found;
@@ -209,6 +256,7 @@ export default function AISummary() {
       count: 0,
       type: type || "both",
       category: matchedCategory,
+      excludeCategories: excludeCategories.length > 0 ? excludeCategories : undefined,
       period: periodLabel,
       query: userQuery,
     };
@@ -359,13 +407,20 @@ export default function AISummary() {
       periodLabel = parsedQuery.period;
       type = parsedQuery.type;
       
-      // Filter by category if specified
-      if (parsedQuery.category) {
-        filteredTransactions = transactions.filter(t => {
-          const transactionCategory = t.category.toLowerCase().trim();
-          const queryCategory = parsedQuery.category!.toLowerCase().trim();
-          return transactionCategory === queryCategory;
-        });
+      // Exclude categories (e.g. "except savings")
+      if (parsedQuery.excludeCategories?.length) {
+        const excludedKeys = new Set(
+          parsedQuery.excludeCategories.map((c) => normalizeCategoryKey(c))
+        );
+        filteredTransactions = transactions.filter(
+          (t) => !excludedKeys.has(normalizeCategoryKey(t.category))
+        );
+      } else if (parsedQuery.category) {
+        // Include only a specific category
+        const queryCategoryKey = normalizeCategoryKey(parsedQuery.category);
+        filteredTransactions = transactions.filter(
+          (t) => normalizeCategoryKey(t.category) === queryCategoryKey
+        );
       }
     }
 
@@ -377,7 +432,12 @@ export default function AISummary() {
       total,
       count,
       type,
-      category: useQuickFilters ? (selectedCategory !== "all" ? selectedCategory : undefined) : parsedQuery?.category,
+      category: useQuickFilters
+        ? selectedCategory !== "all"
+          ? selectedCategory
+          : undefined
+        : parsedQuery?.category,
+      excludeCategories: useQuickFilters ? undefined : parsedQuery?.excludeCategories,
       period: periodLabel,
       query: useQuickFilters ? "Quick Filter" : parsedQuery?.query || "",
       transactions: filteredTransactions,
@@ -615,7 +675,7 @@ export default function AISummary() {
           <CardHeader>
             <CardTitle className="text-lg font-semibold">Ask a Question</CardTitle>
             <CardDescription>
-              Examples: "How much I spent on Poland rent in last 6 months" or "Total expenses this month"
+              Examples: "Total expenses this month" or "Total expenses this month, except savings category"
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -682,7 +742,13 @@ export default function AISummary() {
               <CardTitle className="text-lg font-semibold">Result</CardTitle>
               <CardDescription className="flex flex-wrap items-center gap-2">
                 <span>{result.period}</span>
-                {result.category && (
+                {result.excludeCategories?.map((cat) => (
+                  <span key={cat} className="contents">
+                    <span>•</span>
+                    <Badge variant="outline">Excluding {cat}</Badge>
+                  </span>
+                ))}
+                {result.category && !result.excludeCategories?.length && (
                   <>
                     <span>•</span>
                     <Badge variant="secondary">{result.category}</Badge>
