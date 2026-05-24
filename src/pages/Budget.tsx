@@ -166,16 +166,19 @@ export default function Budget() {
   }, [budgets, spentByCategory, categoryIconMap]);
 
   const summary = useMemo(() => {
+    const isSavingsTransaction = (category: string | null | undefined) =>
+      normalizeCategoryKey(category) === SAVINGS_CATEGORY_KEY;
+
     const totalIncome = transactions
       .filter((t) => t.type === "income")
       .reduce((sum, t) => sum + Number(t.amount), 0);
 
     const totalSpent = transactions
-      .filter((t) => t.type === "expense")
+      .filter((t) => t.type === "expense" && !isSavingsTransaction(t.category))
       .reduce((sum, t) => sum + Number(t.amount), 0);
 
     const totalSavings = transactions
-      .filter((t) => normalizeCategoryKey(t.category) === SAVINGS_CATEGORY_KEY)
+      .filter((t) => isSavingsTransaction(t.category))
       .reduce((sum, t) => sum + Number(t.amount), 0);
 
     const remaining = totalIncome - totalSpent - totalSavings;
