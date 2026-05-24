@@ -26,7 +26,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell } from "recharts";
 import { toast } from "sonner";
 import { cn, capitalizeFirst } from "@/lib/utils";
 import type { Transaction } from "@/types/transaction";
@@ -43,6 +43,70 @@ const COLORS = {
 };
 
 type DateFilterType = "this-month" | "last-month" | "this-year" | "custom";
+
+type BreakdownDatum = { category: string; amount: number };
+
+const CHART_CONTAINER_CLASS =
+  "h-[min(420px,55vh)] w-full min-w-0 aspect-auto justify-stretch [&_.recharts-responsive-container]:!h-full [&_.recharts-responsive-container]:!w-full";
+
+function CategoryBreakdownChart({
+  data,
+  chartConfig,
+  defaultBarColor,
+  getBarColor,
+}: {
+  data: BreakdownDatum[];
+  chartConfig: Record<string, { label: string; color?: string }>;
+  defaultBarColor: string;
+  getBarColor?: (category: string) => string;
+}) {
+  const chartData = data.map((item) => ({
+    ...item,
+    category: capitalizeFirst(item.category),
+  }));
+  const itemCount = chartData.length;
+  const useAngledLabels = itemCount > 3;
+  const xAxisHeight = useAngledLabels ? 96 : 52;
+  const bottomMargin = useAngledLabels ? 24 : 8;
+
+  return (
+    <ChartContainer config={chartConfig} className={CHART_CONTAINER_CLASS}>
+      <BarChart
+        data={chartData}
+        margin={{ top: 12, right: 20, left: 4, bottom: bottomMargin }}
+        barCategoryGap={itemCount > 8 ? "12%" : "18%"}
+      >
+        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+        <XAxis
+          dataKey="category"
+          interval={0}
+          angle={useAngledLabels ? -45 : 0}
+          textAnchor={useAngledLabels ? "end" : "middle"}
+          height={xAxisHeight}
+          tick={{ fontSize: 11 }}
+          tickMargin={useAngledLabels ? 6 : 10}
+        />
+        <YAxis
+          width={56}
+          tick={{ fontSize: 11 }}
+          tickFormatter={(value) =>
+            Number(value) >= 1000
+              ? `${Math.round(Number(value) / 1000)}k`
+              : String(value)
+          }
+        />
+        <ChartTooltip content={<ChartTooltipContent />} />
+        <Bar dataKey="amount" fill={defaultBarColor} radius={[6, 6, 0, 0]}>
+          {getBarColor
+            ? chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={getBarColor(entry.category)} />
+              ))
+            : null}
+        </Bar>
+      </BarChart>
+    </ChartContainer>
+  );
+}
 
 export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -529,7 +593,7 @@ export default function Dashboard() {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="income" className="mt-6">
+              <TabsContent value="income" className="mt-6 w-full min-w-0">
                 {incomeBreakdown.length > 0 ? (
                   <>
                     <div className="mb-4 flex flex-wrap gap-4">
@@ -545,21 +609,11 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
-                    <ChartContainer config={chartConfig} className="h-[300px]">
-                      <ResponsiveContainer>
-                        <BarChart data={incomeBreakdown.map(item => ({ ...item, category: capitalizeFirst(item.category) }))}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="category" />
-                          <YAxis />
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                          <Bar 
-                            dataKey="amount" 
-                            fill={COLORS.income} 
-                            radius={[8, 8, 0, 0]}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
+                    <CategoryBreakdownChart
+                      data={incomeBreakdown}
+                      chartConfig={chartConfig}
+                      defaultBarColor={COLORS.income}
+                    />
                   </>
                 ) : (
                   <div className="py-12 text-center text-muted-foreground">
@@ -568,7 +622,7 @@ export default function Dashboard() {
                 )}
               </TabsContent>
 
-              <TabsContent value="expense" className="mt-6">
+              <TabsContent value="expense" className="mt-6 w-full min-w-0">
                 {expenseBreakdown.length > 0 ? (
                   <>
                     <div className="mb-4 flex flex-wrap gap-4">
@@ -584,24 +638,12 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
-                    <ChartContainer config={chartConfig} className="h-[300px]">
-                      <ResponsiveContainer>
-                        <BarChart data={expenseBreakdown.map(item => ({ ...item, category: capitalizeFirst(item.category) }))}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="category" />
-                          <YAxis />
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                          <Bar
-                            dataKey="amount"
-                            radius={[8, 8, 0, 0]}
-                          >
-                            {expenseBreakdown.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={getCategoryColor(entry.category)} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </ChartContainer>
+                    <CategoryBreakdownChart
+                      data={expenseBreakdown}
+                      chartConfig={chartConfig}
+                      defaultBarColor={COLORS.expense}
+                      getBarColor={(category) => getCategoryColor(category)}
+                    />
                   </>
                 ) : (
                   <div className="py-12 text-center text-muted-foreground">
