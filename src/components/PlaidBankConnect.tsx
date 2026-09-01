@@ -100,8 +100,12 @@ export function PlaidBankConnect({ compact = false }: { compact?: boolean }) {
       await importAndNotify(result.transactions, result.item.institution_name);
       return result;
     },
-    onSuccess: async () => {
-      await refreshFinance();
+    onSuccess: async (result) => {
+      queryClient.setQueryData(["plaid-items"], (current: { items?: PlaidItem[] } | undefined) => {
+        const existing = current?.items?.filter((item) => item.item_id !== result.item.item_id) ?? [];
+        return { items: [result.item, ...existing] };
+      });
+      await queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
     onError: (error: Error) => {
       toast.error(error.message);
