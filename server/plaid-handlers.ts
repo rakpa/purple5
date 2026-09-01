@@ -259,11 +259,11 @@ async function exchangeAndStore(
 
 async function syncTransactions(client: PlaidApi, item: StoredPlaidItem) {
   const added: PlaidTransaction[] = [];
+  const isInitial = !item.cursor;
   let cursor = item.cursor || undefined;
-  let hasMore = true;
   let attempts = 0;
 
-  while (hasMore) {
+  while (true) {
     try {
       const response = await client.transactionsSync({
         access_token: item.access_token,
@@ -271,11 +271,23 @@ async function syncTransactions(client: PlaidApi, item: StoredPlaidItem) {
         count: 100,
       });
       added.push(...response.data.added);
-      hasMore = response.data.has_more;
       cursor = response.data.next_cursor;
+
+      if (response.data.has_more) {
+        continue;
+      }
+
+      if (isInitial && added.length === 0 && attempts < 8) {
+        attempts += 1;
+        cursor = undefined;
+        added.length = 0;
+        await sleep(1500);
+        continue;
+      }
+      break;
     } catch (error: unknown) {
       const err = error as { response?: { data?: { error_code?: string } } };
-      if (err.response?.data?.error_code === "PRODUCT_NOT_READY" && attempts < 6) {
+      if (err.response?.data?.error_code === "PRODUCT_NOT_READY" && attempts < 8) {
         attempts += 1;
         await sleep(1500);
         continue;
@@ -287,11 +299,9 @@ async function syncTransactions(client: PlaidApi, item: StoredPlaidItem) {
   item.cursor = cursor || item.cursor;
   item.updated_at = new Date().toISOString();
 
-  const mapped = added
+  return added
     .filter((txn) => !txn.pending && txn.amount !== 0)
     .map(mapPlaidTransaction);
-
-  return mapped;
 }
 
 function plaidErrorMessage(error: unknown) {
@@ -409,6 +419,7 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
         created.data.public_token,
         req.authorization
       );
+      await sleep(1500);
       const stored = await loadItem(userId, item.item_id, req.authorization);
       const transactions = stored ? await syncTransactions(client, stored) : [];
       if (stored) await persistItem(userId, stored, req.authorization);
