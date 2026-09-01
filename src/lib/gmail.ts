@@ -123,10 +123,37 @@ export function saveGmailSessionTokens(payload: {
   });
 }
 
+export interface GmailStatementMatch {
+  gmail_message_id: string;
+  subject: string;
+  from: string;
+  date: string;
+  snippet?: string;
+  bank: string;
+}
+
+export function searchGmailStatements(options?: {
+  query?: string;
+  googleAccessToken?: string | null;
+}) {
+  return gmailFetch<{
+    email?: string;
+    statements: GmailStatementMatch[];
+    message?: string;
+  }>("search", {
+    method: "POST",
+    body: JSON.stringify({
+      query: options?.query,
+      google_access_token: options?.googleAccessToken || undefined,
+    }),
+  });
+}
+
 export function fetchGmailStatements(options?: {
   statementPassword?: string;
   query?: string;
   googleAccessToken?: string | null;
+  messageId?: string;
 }) {
   return gmailFetch<{
     email?: string;
@@ -140,6 +167,7 @@ export function fetchGmailStatements(options?: {
       statement_password: options?.statementPassword,
       query: options?.query,
       google_access_token: options?.googleAccessToken || undefined,
+      message_id: options?.messageId || undefined,
     }),
   });
 }

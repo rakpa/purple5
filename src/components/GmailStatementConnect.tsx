@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FileText, Loader2, Mail, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -16,92 +16,88 @@ import {
 } from "@/components/ui/select";
 import {
   fetchGmailStatements,
-  getGmailStatus,
   getStoredStatementPassword,
   importGmailTransactions,
-  saveGmailStatementPassword,
+  searchGmailStatements,
   storeStatementPassword,
   type GmailCategoryGroup,
+  type GmailStatementMatch,
 } from "@/lib/gmail";
 import { syncGmailFromGoogleLogin } from "@/lib/gmail-session";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency } from "@/lib/utils";
 
+function formatMailDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value || "";
+  return parsed.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
 export function GmailStatementConnect() {
   const queryClient = useQueryClient();
+  const [loginEmail, setLoginEmail] = useState<string | null>(null);
+  const [matches, setMatches] = useState<GmailStatementMatch[]>([]);
+  const [selected, setSelected] = useState<GmailStatementMatch | null>(null);
   const [password, setPassword] = useState(() => getStoredStatementPassword());
   const [category, setCategory] = useState("all");
-  const [loginEmail, setLoginEmail] = useState<string | null>(null);
-  const autoFetched = useRef(false);
   const [result, setResult] = useState<{
-    statements: { subject: string; filename: string; date: string; transaction_count: number; text_preview?: string }[];
+    statements: { subject: string; filename: string; date: string; transaction_count: number; bank?: string }[];
     transactions: GmailCategoryGroup["transactions"];
     categories: GmailCategoryGroup[];
     message?: string;
   } | null>(null);
 
-  const statusQuery = useQuery({
-    queryKey: ["gmail-status"],
-    queryFn: getGmailStatus,
-  });
-
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setLoginEmail(data.user?.email ?? null);
     });
-    void syncGmailFromGoogleLogin()
-      .then(async () => {
-        await queryClient.invalidateQueries({ queryKey: ["gmail-status"] });
-      })
-      .catch(() => {});
-  }, [queryClient]);
+    void syncGmailFromGoogleLogin().catch(() => {});
+  }, []);
 
-  const savePasswordMutation = useMutation({
-    mutationFn: () => saveGmailStatementPassword(password),
-    onSuccess: async () => {
-      storeStatementPassword(password);
-      toast.success("Statement password saved");
-      await queryClient.invalidateQueries({ queryKey: ["gmail-status"] });
-      fetchMutation.mutate();
+  const searchMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await supabase.auth.getSession();
+      return searchGmailStatements({
+        googleAccessToken: data.session?.provider_token,
+      });
+    },
+    onSuccess: (payload) => {
+      setMatches(payload.statements || []);
+      setSelected(null);
+      setResult(null);
+      if (payload.message) toast.message(payload.message);
+      else toast.success(`Found ${payload.statements.length} statement email${payload.statements.length === 1 ? "" : "s"}`);
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const fetchMutation = useMutation({
+  const openMutation = useMutation({
     mutationFn: async () => {
+      if (!selected) throw new Error("Select a statement email first.");
       const pin = password || getStoredStatementPassword();
-      if (pin) storeStatementPassword(pin);
+      if (!pin) throw new Error("Enter the PDF password for this statement.");
+      storeStatementPassword(pin);
       const { data } = await supabase.auth.getSession();
       return fetchGmailStatements({
-        statementPassword: pin || undefined,
+        statementPassword: pin,
         googleAccessToken: data.session?.provider_token,
+        messageId: selected.gmail_message_id,
       });
     },
     onSuccess: (payload) => {
       setResult(payload);
       setCategory("all");
       if (payload.message) toast.message(payload.message);
-      else toast.success(`Found ${payload.transactions.length} transactions`);
+      else toast.success(`Loaded ${payload.transactions.length} transactions`);
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
-  useEffect(() => {
-    if (autoFetched.current) return;
-    const pin = password || getStoredStatementPassword();
-    if (!pin) return;
-    let cancelled = false;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (cancelled || autoFetched.current || !data.session?.provider_token) return;
-      autoFetched.current = true;
-      fetchMutation.mutate();
-    });
-    return () => {
-      cancelled = true;
-    };
-    // Fetch once when Settings opens with a saved PIN and a live Google token.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [password]);
+  const filteredTransactions = useMemo(() => {
+    const txns = result?.transactions ?? [];
+    if (category === "all") return txns;
+    return txns.filter((txn) => txn.category === category);
+  }, [result, category]);
 
   const importMutation = useMutation({
     mutationFn: () => importGmailTransactions(filteredTransactions),
@@ -112,82 +108,111 @@ export function GmailStatementConnect() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const email = statusQuery.data?.email || loginEmail;
-  const filteredTransactions = useMemo(() => {
-    const txns = result?.transactions ?? [];
-    if (category === "all") return txns;
-    return txns.filter((txn) => txn.category === category);
-  }, [result, category]);
+  const email = loginEmail;
 
   return (
     <Card className="rounded-2xl shadow-card">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Mail className="h-5 w-5" />
-          Gmail bank statements
+          Fetch your bank statement
         </CardTitle>
         <CardDescription>
-          Statement emails are read from the Google account you already used to sign in. There is no second Connect or authorize step.
+          Search the Google account already used to sign in, pick a statement, then unlock the PDF.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="rounded-full">
-            {email ? `Using ${email}` : "Using your Google login"}
+            {email ? `Email already connected: ${email}` : "Using your Google login"}
           </Badge>
-          <Badge variant="outline" className="rounded-full">
-            Credit Agricole
-          </Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Enter the Credit Agricole PDF password, then this screen fetches emails titled
-          &quot;Wyciąg elektroniczny&quot; from the same Google account. Saving the password starts
-          the fetch. If Google asks for extra permission, allow it once.
-        </p>
-
-        <div className="space-y-2">
-          <Label htmlFor="ca-pdf-password">Credit Agricole PDF password</Label>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <Input
-              id="ca-pdf-password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder={statusQuery.data?.has_password ? "Saved — enter to replace" : "Statement PIN"}
-              className="h-11 rounded-xl"
-            />
-            <Button
-              variant="outline"
-              className="rounded-xl"
-              onClick={() => savePasswordMutation.mutate()}
-              disabled={!password || savePasswordMutation.isPending}
-            >
-              Save password
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            This unlocks the bank PDF. It is not your Gmail password.
-          </p>
         </div>
 
         <Button
           className="rounded-xl"
-          onClick={() => fetchMutation.mutate()}
-          disabled={fetchMutation.isPending}
+          onClick={() => searchMutation.mutate()}
+          disabled={searchMutation.isPending}
         >
-          {fetchMutation.isPending ? (
+          {searchMutation.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <FileText className="h-4 w-4" />
           )}
-          Fetch statements
+          Fetch your bank statement
         </Button>
+
+        {matches.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-foreground">Which statement do you want to open?</p>
+            <div className="space-y-2">
+              {matches.map((item) => {
+                const active = selected?.gmail_message_id === item.gmail_message_id;
+                return (
+                  <button
+                    key={item.gmail_message_id}
+                    type="button"
+                    onClick={() => {
+                      setSelected(item);
+                      setResult(null);
+                    }}
+                    className={`w-full text-left rounded-xl border p-3 transition-colors ${
+                      active ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                    }`}
+                  >
+                    <p className="text-sm font-medium text-foreground">{item.bank}</p>
+                    <p className="text-sm text-foreground mt-0.5">{item.subject || "Bank statement PDF"}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatMailDate(item.date)}
+                      {item.from ? ` · ${item.from}` : ""}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {selected && (
+          <div className="space-y-3 rounded-xl border border-border p-4">
+            <p className="text-sm font-medium text-foreground">
+              Unlock {selected.bank}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              This is the PDF password from the bank (statement PIN), not your Gmail password.
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="statement-pdf-password">Statement PDF password</Label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Input
+                  id="statement-pdf-password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Statement PIN"
+                  className="h-11 rounded-xl"
+                />
+                <Button
+                  className="rounded-xl"
+                  onClick={() => openMutation.mutate()}
+                  disabled={openMutation.isPending || !password}
+                >
+                  {openMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                  Load statement
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {result && (
           <div className="space-y-4">
             {result.statements.map((statement) => (
-              <div key={`${statement.gmail_message_id}-${statement.filename}`} className="rounded-xl border border-border p-3">
-                <p className="text-sm font-medium text-foreground">{statement.subject || statement.filename}</p>
+              <div key={`${statement.subject}-${statement.filename}`} className="rounded-xl border border-border p-3">
+                <p className="text-sm font-medium text-foreground">{statement.bank || statement.subject}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {statement.filename} · {statement.transaction_count} transactions
                 </p>
@@ -225,7 +250,7 @@ export function GmailStatementConnect() {
 
             <div className="space-y-2">
               {filteredTransactions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No transactions in this category.</p>
+                <p className="text-sm text-muted-foreground">No transactions in this statement.</p>
               ) : (
                 filteredTransactions.map((txn) => (
                   <div key={txn.plaid_transaction_id} className="rounded-lg bg-muted/50 px-3 py-2 flex justify-between gap-3">
