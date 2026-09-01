@@ -10,7 +10,7 @@ export default function Banks() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Poland banks</h1>
             <p className="text-muted-foreground mt-2">
-              Connect a Polish bank in Plaid sandbox and import PLN transactions.
+              Connect your Revolut account and import PLN transactions.
             </p>
           </div>
           <PlaidBankConnect />

@@ -97,6 +97,9 @@ function AuthCallbackHandler() {
     // Also listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        if (window.location.search.includes("oauth_state_id=")) {
+          return;
+        }
         const storedRedirectUrl = localStorage.getItem('auth_redirect_url');
         if (storedRedirectUrl) {
           const redirectTo = new URL(storedRedirectUrl).pathname;

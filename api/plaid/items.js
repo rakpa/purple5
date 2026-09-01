@@ -1,5 +1,10 @@
-export default function handler(_req, res) {
-  res.statusCode = 200;
-  res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify({ items: [] }));
+import { bearer, listStoredItems, send } from "../../lib/plaid-http.js";
+
+export default async function handler(req, res) {
+  try {
+    const items = await listStoredItems(bearer(req));
+    send(res, 200, { items });
+  } catch (error) {
+    send(res, 200, { items: [] });
+  }
 }

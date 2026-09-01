@@ -28,6 +28,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 
 const LINK_TOKEN_KEY = "plaid_link_token";
+const REVOLUT_PL = "ins_132675";
 
 async function importAndNotify(transactions: MappedPlaidTransaction[], institutionName: string) {
   const result = await importPlaidTransactions(transactions);
@@ -141,9 +142,17 @@ export function PlaidBankConnect({ compact = false }: { compact?: boolean }) {
     async (publicToken: string) => {
       try {
         const result = await exchangePlaidPublicToken(publicToken);
-        const synced = await syncPlaidItem(result.item.item_id);
-        await importAndNotify(synced.transactions, result.item.institution_name);
-        await refreshFinance();
+        if (result.transactions?.length) {
+          await importAndNotify(result.transactions, result.item.institution_name);
+        } else {
+          const synced = await syncPlaidItem(result.item.item_id);
+          await importAndNotify(synced.transactions, result.item.institution_name);
+        }
+        queryClient.setQueryData(["plaid-items"], (current: { items?: PlaidItem[] } | undefined) => {
+          const existing = current?.items?.filter((item) => item.item_id !== result.item.item_id) ?? [];
+          return { items: [result.item, ...existing] };
+        });
+        await queryClient.invalidateQueries({ queryKey: ["transactions"] });
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Failed to connect bank");
       } finally {
@@ -155,9 +164,23 @@ export function PlaidBankConnect({ compact = false }: { compact?: boolean }) {
         }
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [queryClient]
   );
+
+  const startPlaidLink = async (institutionId?: string) => {
+    try {
+      setOpeningLink(true);
+      const created = await createPlaidLinkToken({
+        redirectUri: `${window.location.origin}/banks`,
+        institutionId,
+      });
+      localStorage.setItem(LINK_TOKEN_KEY, created.link_token);
+      setLinkToken(created.link_token);
+    } catch (error) {
+      setOpeningLink(false);
+      toast.error(error instanceof Error ? error.message : "Could not start Plaid Link");
+    }
+  };
 
   useEffect(() => {
     if (!window.location.search.includes("oauth_state_id=")) return;
@@ -167,21 +190,6 @@ export function PlaidBankConnect({ compact = false }: { compact?: boolean }) {
       setOpeningLink(true);
     }
   }, []);
-
-  const startPlaidLink = async () => {
-    try {
-      setOpeningLink(true);
-      const created = await createPlaidLinkToken(`${window.location.origin}/settings`);
-      localStorage.setItem(LINK_TOKEN_KEY, created.link_token);
-      setLinkToken(created.link_token);
-      if (created.redirect_uri_skipped) {
-        toast.message("Plaid Link opened without OAuth redirect. Use a sandbox bank below if a Polish bank asks you to leave the app.");
-      }
-    } catch (error) {
-      setOpeningLink(false);
-      toast.error(error instanceof Error ? error.message : "Could not start Plaid Link");
-    }
-  };
 
   const items = useMemo(() => itemsQuery.data?.items ?? [], [itemsQuery.data?.items]);
   const institutions =
@@ -226,7 +234,7 @@ export function PlaidBankConnect({ compact = false }: { compact?: boolean }) {
               <p className="text-sm text-muted-foreground mt-1">
                 {first
                   ? `${first.institution_name} · ${formatCurrency(totalBalance)}`
-                  : "Connect a Polish sandbox bank and import PLN transactions."}
+                  : "Connect your real Revolut account and import PLN transactions."}
               </p>
             </div>
           </div>
@@ -247,15 +255,15 @@ export function PlaidBankConnect({ compact = false }: { compact?: boolean }) {
           ) : (
             <Button
               className="rounded-xl"
-              onClick={() => connectMutation.mutate(selectedBank)}
-              disabled={connectMutation.isPending}
+              onClick={() => startPlaidLink(REVOLUT_PL)}
+              disabled={openingLink}
             >
-              {connectMutation.isPending ? (
+              {openingLink ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Wallet className="h-4 w-4" />
               )}
-              Connect PKO sandbox
+              Connect Revolut
             </Button>
           )}
         </CardContent>
@@ -268,10 +276,10 @@ export function PlaidBankConnect({ compact = false }: { compact?: boolean }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Landmark className="h-5 w-5" />
-          Poland bank (Plaid sandbox)
+          Connect Revolut
         </CardTitle>
         <CardDescription>
-          Connect a Polish bank in Plaid sandbox and import PLN transactions into ExpenseTrack.
+          Log in to your real Revolut account with Plaid Open Banking and import PLN transactions.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -287,11 +295,61 @@ export function PlaidBankConnect({ compact = false }: { compact?: boolean }) {
           </Badge>
         </div>
 
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Your real Revolut</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Opens Revolut’s Open Banking login. This is not the sandbox test bank. You will leave this app, sign in at Revolut, then return here.
+            </p>
+            {envLabel !== "production" && (
+              <p className="text-sm text-destructive mt-2">
+                Plaid is still in <span className="font-medium">sandbox</span>. That cannot access your live Revolut. In the Plaid Dashboard copy the <span className="font-medium">Production</span> secret, then set Vercel <span className="font-mono">PLAID_ENV=production</span> and <span className="font-mono">PLAID_SECRET</span> to that production secret. Also add <span className="font-mono">{typeof window !== "undefined" ? `${window.location.origin}/banks` : "https://purple5.vercel.app/banks"}</span> under Allowed redirect URIs.
+              </p>
+            )}
+          </div>
+          <Button
+            size="lg"
+            className="rounded-xl"
+            onClick={() => startPlaidLink(REVOLUT_PL)}
+            disabled={openingLink}
+          >
+            {openingLink ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Link2 className="h-4 w-4" />
+            )}
+            Connect my Revolut
+          </Button>
+        </div>
+
+        <div className="rounded-xl border border-border p-4 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Another Polish bank</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              PKO, mBank, ING, Pekao, and others. Same Open Banking login. Add this site’s /banks URL in Plaid Allowed redirect URIs.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            className="rounded-xl"
+            onClick={() => startPlaidLink()}
+            disabled={openingLink}
+          >
+            {openingLink ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Link2 className="h-4 w-4" />
+            )}
+            Open Plaid Link
+          </Button>
+        </div>
+
+        {envLabel !== "production" && (
         <div className="rounded-xl border border-border bg-muted/40 p-4 space-y-4">
           <div>
-            <p className="text-sm font-medium text-foreground">Instant sandbox bank</p>
+            <p className="text-sm font-medium text-foreground">Sandbox test data</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Creates a Plaid sandbox Item for a real Polish institution (PKO, mBank, ING, Pekao, and more) using test credentials <span className="font-mono">user_good / pass_good</span>.
+              Fake Polish bank data with <span className="font-mono">user_good / pass_good</span>. This will not log into your real Revolut.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
@@ -322,28 +380,7 @@ export function PlaidBankConnect({ compact = false }: { compact?: boolean }) {
             </Button>
           </div>
         </div>
-
-        <div className="rounded-xl border border-border p-4 space-y-3">
-          <div>
-            <p className="text-sm font-medium text-foreground">Plaid Link</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Opens Plaid Link limited to Poland. For Open Banking OAuth, add this app URL in the Plaid Dashboard under Allowed redirect URIs.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            className="rounded-xl"
-            onClick={startPlaidLink}
-            disabled={openingLink}
-          >
-            {openingLink ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Link2 className="h-4 w-4" />
-            )}
-            Open Plaid Link
-          </Button>
-        </div>
+        )}
 
         {linkToken && (
           <PlaidLinkLauncher
@@ -369,7 +406,7 @@ export function PlaidBankConnect({ compact = false }: { compact?: boolean }) {
                   <div>
                     <p className="font-medium text-foreground">{item.institution_name}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {item.accounts.length} account{item.accounts.length === 1 ? "" : "s"} · sandbox
+                      {item.accounts.length} account{item.accounts.length === 1 ? "" : "s"} · {envLabel}
                     </p>
                   </div>
                   <div className="flex gap-2">

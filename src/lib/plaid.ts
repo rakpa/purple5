@@ -82,7 +82,7 @@ export function getPlaidItems() {
   return plaidFetch<{ items: PlaidItem[] }>("items");
 }
 
-export function createPlaidLinkToken(redirectUri?: string) {
+export function createPlaidLinkToken(options?: { redirectUri?: string; institutionId?: string }) {
   return plaidFetch<{
     link_token: string;
     expiration: string;
@@ -91,12 +91,15 @@ export function createPlaidLinkToken(redirectUri?: string) {
     redirect_uri_skipped?: boolean;
   }>("create-link-token", {
     method: "POST",
-    body: JSON.stringify(redirectUri ? { redirect_uri: redirectUri } : {}),
+    body: JSON.stringify({
+      redirect_uri: options?.redirectUri,
+      institution_id: options?.institutionId,
+    }),
   });
 }
 
 export function exchangePlaidPublicToken(publicToken: string) {
-  return plaidFetch<{ item: PlaidItem }>("exchange", {
+  return plaidFetch<{ item: PlaidItem; transactions?: MappedPlaidTransaction[] }>("exchange", {
     method: "POST",
     body: JSON.stringify({ public_token: publicToken }),
   });
