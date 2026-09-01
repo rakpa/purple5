@@ -59,7 +59,13 @@ async function plaidFetch<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers || {}),
     },
   });
-  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
+  const raw = await response.text();
+  let payload: T & { error?: string } = {} as T & { error?: string };
+  try {
+    payload = raw ? (JSON.parse(raw) as T & { error?: string }) : payload;
+  } catch {
+    payload = { error: raw.replace(/\s+/g, " ").slice(0, 180) } as T & { error?: string };
+  }
   if (!response.ok) {
     throw new Error(payload.error || `Plaid request failed (${response.status})`);
   }

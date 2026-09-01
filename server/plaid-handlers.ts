@@ -1,12 +1,4 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import {
-  Configuration,
-  PlaidApi,
-  PlaidEnvironments,
-  Products,
-  CountryCode,
-  type Transaction as PlaidTransaction,
-} from "plaid";
 import { POLISH_SANDBOX_BANKS } from "./polish-institutions";
 import { mapPlaidTransaction } from "./plaid-categories";
 import {
@@ -43,35 +35,44 @@ function plaidEnvName() {
   return (process.env.PLAID_ENV || "sandbox").toLowerCase();
 }
 
-function getPlaidClient() {
+function plaidHost() {
+  const env = plaidEnvName();
+  if (env === "production") return "https://production.plaid.com";
+  if (env === "development") return "https://development.plaid.com";
+  return "https://sandbox.plaid.com";
+}
+
+function credentials() {
   const clientId = process.env.PLAID_CLIENT_ID;
   const secret = process.env.PLAID_SECRET;
   if (!clientId || !secret) {
     throw new HttpError(
       500,
-      "Plaid is not configured. Set PLAID_CLIENT_ID and PLAID_SECRET in the server environment."
+      "Plaid is not configured. Set PLAID_CLIENT_ID and PLAID_SECRET on Vercel (Production)."
     );
   }
+  return { client_id: clientId, secret };
+}
 
-  const env = plaidEnvName();
-  const basePath =
-    env === "production"
-      ? PlaidEnvironments.production
-      : env === "development"
-        ? PlaidEnvironments.development
-        : PlaidEnvironments.sandbox;
-
-  return new PlaidApi(
-    new Configuration({
-      basePath,
-      baseOptions: {
-        headers: {
-          "PLAID-CLIENT-ID": clientId,
-          "PLAID-SECRET": secret,
-        },
-      },
-    })
-  );
+async function plaidPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(`${plaidHost()}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...credentials(), ...body }),
+  });
+  const data = (await response.json().catch(() => ({}))) as T & {
+    error_message?: string;
+    error_code?: string;
+  };
+  if (!response.ok) {
+    const error = new HttpError(
+      response.status >= 400 && response.status < 600 ? response.status : 500,
+      data.error_message || `Plaid ${path} failed (${response.status})`
+    );
+    (error as HttpError & { errorCode?: string }).errorCode = data.error_code;
+    throw error;
+  }
+  return data;
 }
 
 function supabaseUrl() {
@@ -137,7 +138,11 @@ function toStoredAccounts(
 }
 
 async function persistItem(userId: string, item: StoredPlaidItem, authorization?: string) {
-  savePlaidItem(userId, item);
+  try {
+    savePlaidItem(userId, item);
+  } catch (error) {
+    console.warn("Local Plaid store write failed:", error);
+  }
   const client = userClient(authorization);
   if (!client) return;
   const { error } = await client.from("plaid_items").upsert(
@@ -186,7 +191,11 @@ async function loadItem(
     created_at: data.created_at,
     updated_at: data.updated_at,
   };
-  savePlaidItem(userId, item);
+  try {
+    savePlaidItem(userId, item);
+  } catch {
+    // ignore
+  }
   return item;
 }
 
@@ -225,31 +234,33 @@ async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function exchangeAndStore(
-  client: PlaidApi,
-  userId: string,
-  publicToken: string,
-  authorization?: string
-) {
-  const exchange = await client.itemPublicTokenExchange({ public_token: publicToken });
-  const accessToken = exchange.data.access_token;
-  const itemId = exchange.data.item_id;
+type PlaidAccountsResponse = {
+  accounts: Parameters<typeof toStoredAccounts>[0];
+  item: { item_id: string; institution_id?: string | null; institution_name?: string | null };
+};
 
-  const accountsResponse = await client.accountsGet({ access_token: accessToken });
+async function exchangeAndStore(userId: string, publicToken: string, authorization?: string) {
+  const exchange = await plaidPost<{ access_token: string; item_id: string }>(
+    "/item/public_token/exchange",
+    { public_token: publicToken }
+  );
+  const accountsResponse = await plaidPost<PlaidAccountsResponse>("/accounts/get", {
+    access_token: exchange.access_token,
+  });
   const institutionName =
-    accountsResponse.data.item.institution_name ||
-    POLISH_SANDBOX_BANKS.find((bank) => bank.institution_id === accountsResponse.data.item.institution_id)
+    accountsResponse.item.institution_name ||
+    POLISH_SANDBOX_BANKS.find((bank) => bank.institution_id === accountsResponse.item.institution_id)
       ?.name ||
     "Poland bank";
 
   const now = new Date().toISOString();
   const item: StoredPlaidItem = {
-    item_id: itemId,
-    access_token: accessToken,
-    institution_id: accountsResponse.data.item.institution_id ?? null,
+    item_id: exchange.item_id,
+    access_token: exchange.access_token,
+    institution_id: accountsResponse.item.institution_id ?? null,
     institution_name: institutionName,
     cursor: "",
-    accounts: toStoredAccounts(accountsResponse.data.accounts),
+    accounts: toStoredAccounts(accountsResponse.accounts),
     created_at: now,
     updated_at: now,
   };
@@ -257,39 +268,57 @@ async function exchangeAndStore(
   return publicItem(item);
 }
 
-async function syncTransactions(client: PlaidApi, item: StoredPlaidItem) {
-  const added: PlaidTransaction[] = [];
+type PlaidSyncResponse = {
+  added: Array<{
+    transaction_id: string;
+    account_id: string;
+    amount: number;
+    date: string;
+    name?: string | null;
+    merchant_name?: string | null;
+    iso_currency_code?: string | null;
+    pending?: boolean;
+    category?: string[] | null;
+    personal_finance_category?: { primary?: string | null; detailed?: string | null } | null;
+  }>;
+  has_more: boolean;
+  next_cursor: string;
+};
+
+async function syncTransactions(item: StoredPlaidItem) {
+  const added: PlaidSyncResponse["added"] = [];
   const isInitial = !item.cursor;
   let cursor = item.cursor || undefined;
   let attempts = 0;
+  const maxAttempts = process.env.VERCEL ? 3 : 8;
 
   while (true) {
     try {
-      const response = await client.transactionsSync({
+      const response = await plaidPost<PlaidSyncResponse>("/transactions/sync", {
         access_token: item.access_token,
         cursor,
         count: 100,
       });
-      added.push(...response.data.added);
-      cursor = response.data.next_cursor;
+      added.push(...response.added);
+      cursor = response.next_cursor;
 
-      if (response.data.has_more) {
+      if (response.has_more) {
         continue;
       }
 
-      if (isInitial && added.length === 0 && attempts < 8) {
+      if (isInitial && added.length === 0 && attempts < maxAttempts) {
         attempts += 1;
         cursor = undefined;
         added.length = 0;
-        await sleep(1500);
+        await sleep(process.env.VERCEL ? 700 : 1500);
         continue;
       }
       break;
     } catch (error: unknown) {
-      const err = error as { response?: { data?: { error_code?: string } } };
-      if (err.response?.data?.error_code === "PRODUCT_NOT_READY" && attempts < 8) {
+      const err = error as HttpError & { errorCode?: string };
+      if (err.errorCode === "PRODUCT_NOT_READY" && attempts < maxAttempts) {
         attempts += 1;
-        await sleep(1500);
+        await sleep(process.env.VERCEL ? 700 : 1500);
         continue;
       }
       throw error;
@@ -305,15 +334,9 @@ async function syncTransactions(client: PlaidApi, item: StoredPlaidItem) {
 }
 
 function plaidErrorMessage(error: unknown) {
-  const err = error as {
-    response?: { data?: { error_message?: string; error_code?: string } };
-    message?: string;
-  };
-  return (
-    err.response?.data?.error_message ||
-    err.message ||
-    "Plaid request failed"
-  );
+  if (error instanceof HttpError) return error.message;
+  const err = error as { message?: string };
+  return err.message || "Plaid request failed";
 }
 
 export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResponse> {
@@ -336,7 +359,6 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
     }
 
     const userId = await requireUserId(req.authorization);
-    const client = getPlaidClient();
 
     if (req.method === "GET" && action === "items") {
       return { status: 200, body: { items: await listItems(userId, req.authorization) } };
@@ -348,36 +370,42 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
         process.env.PLAID_REDIRECT_URI ||
         "";
 
-      const request = {
+      const payload: Record<string, unknown> = {
         user: { client_user_id: userId },
         client_name: "ExpenseTrack",
-        language: "en" as const,
-        country_codes: [CountryCode.Pl],
-        products: [Products.Transactions],
+        language: "en",
+        country_codes: ["PL"],
+        products: ["transactions"],
         transactions: { days_requested: 90 },
       };
+      if (redirectUri) payload.redirect_uri = redirectUri;
 
       try {
-        const created = await client.linkTokenCreate(
-          redirectUri ? { ...request, redirect_uri: redirectUri } : request
+        const created = await plaidPost<{ link_token: string; expiration: string }>(
+          "/link/token/create",
+          payload
         );
         return {
           status: 200,
           body: {
-            link_token: created.data.link_token,
-            expiration: created.data.expiration,
+            link_token: created.link_token,
+            expiration: created.expiration,
             env: plaidEnvName(),
             country_codes: ["PL"],
           },
         };
       } catch (error: unknown) {
         if (redirectUri) {
-          const fallback = await client.linkTokenCreate(request);
+          delete payload.redirect_uri;
+          const fallback = await plaidPost<{ link_token: string; expiration: string }>(
+            "/link/token/create",
+            payload
+          );
           return {
             status: 200,
             body: {
-              link_token: fallback.data.link_token,
-              expiration: fallback.data.expiration,
+              link_token: fallback.link_token,
+              expiration: fallback.expiration,
               env: plaidEnvName(),
               country_codes: ["PL"],
               redirect_uri_skipped: true,
@@ -391,7 +419,7 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
     if (req.method === "POST" && action === "exchange") {
       const publicToken = String(req.body.public_token || "");
       if (!publicToken) throw new HttpError(400, "public_token is required");
-      const item = await exchangeAndStore(client, userId, publicToken, req.authorization);
+      const item = await exchangeAndStore(userId, publicToken, req.authorization);
       return { status: 200, body: { item } };
     }
 
@@ -405,23 +433,18 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
         throw new HttpError(400, "Choose a supported Poland sandbox bank.");
       }
 
-      const created = await client.sandboxPublicTokenCreate({
+      const created = await plaidPost<{ public_token: string }>("/sandbox/public_token/create", {
         institution_id: institutionId,
-        initial_products: [Products.Transactions],
+        initial_products: ["transactions"],
         options: {
           override_username: "user_good",
           override_password: "pass_good",
         },
       });
-      const item = await exchangeAndStore(
-        client,
-        userId,
-        created.data.public_token,
-        req.authorization
-      );
-      await sleep(1500);
+      const item = await exchangeAndStore(userId, created.public_token, req.authorization);
+      await sleep(process.env.VERCEL ? 500 : 1200);
       const stored = await loadItem(userId, item.item_id, req.authorization);
-      const transactions = stored ? await syncTransactions(client, stored) : [];
+      const transactions = stored ? await syncTransactions(stored) : [];
       if (stored) await persistItem(userId, stored, req.authorization);
       return { status: 200, body: { item: stored ? publicItem(stored) : item, transactions } };
     }
@@ -431,7 +454,7 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
       if (!itemId) throw new HttpError(400, "item_id is required");
       const stored = await loadItem(userId, itemId, req.authorization);
       if (!stored) throw new HttpError(404, "Connected bank not found.");
-      const transactions = await syncTransactions(client, stored);
+      const transactions = await syncTransactions(stored);
       await persistItem(userId, stored, req.authorization);
       return {
         status: 200,
@@ -445,7 +468,7 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
       const stored = await loadItem(userId, itemId, req.authorization);
       if (stored) {
         try {
-          await client.itemRemove({ access_token: stored.access_token });
+          await plaidPost("/item/remove", { access_token: stored.access_token });
         } catch (error) {
           console.warn("Plaid item/remove failed:", plaidErrorMessage(error));
         }
@@ -472,4 +495,45 @@ export function actionFromUrl(url = "") {
   const path = url.split("?")[0];
   const match = path.match(/\/api\/plaid\/?([^/]*)/);
   return match?.[1] || "";
+}
+
+export async function runVercelPlaidHandler(
+  action: string,
+  req: {
+    method?: string;
+    body?: unknown;
+    headers: Record<string, string | string[] | undefined>;
+  },
+  res: {
+    status: (code: number) => { json: (body: unknown) => void; end: () => void };
+  }
+) {
+  try {
+    const authorizationHeader = req.headers.authorization;
+    const authorization = Array.isArray(authorizationHeader)
+      ? authorizationHeader[0]
+      : authorizationHeader;
+    const body =
+      req.body && typeof req.body === "object" && !Array.isArray(req.body)
+        ? (req.body as Record<string, unknown>)
+        : {};
+
+    const result = await handlePlaidApi({
+      method: req.method || "GET",
+      action,
+      body,
+      authorization,
+    });
+
+    const response = res.status(result.status);
+    if (result.body === null) {
+      response.end();
+      return;
+    }
+    response.json(result.body);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Plaid function failed";
+    console.error("Plaid Vercel function crash:", error);
+    res.status(500).json({ error: message });
+  }
 }
