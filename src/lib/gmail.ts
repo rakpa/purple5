@@ -92,7 +92,23 @@ export function disconnectGmail() {
   return gmailFetch<{ ok: boolean }>("disconnect", { method: "POST", body: "{}" });
 }
 
-export function fetchGmailStatements(options?: { statementPassword?: string; query?: string }) {
+export function saveGmailSessionTokens(payload: {
+  email?: string | null;
+  access_token?: string | null;
+  refresh_token?: string | null;
+  expires_in?: number;
+}) {
+  return gmailFetch<{ ok: boolean; email: string | null }>("session", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchGmailStatements(options?: {
+  statementPassword?: string;
+  query?: string;
+  googleAccessToken?: string | null;
+}) {
   return gmailFetch<{
     email?: string;
     statements: GmailStatement[];
@@ -104,6 +120,7 @@ export function fetchGmailStatements(options?: { statementPassword?: string; que
     body: JSON.stringify({
       statement_password: options?.statementPassword,
       query: options?.query,
+      google_access_token: options?.googleAccessToken || undefined,
     }),
   });
 }

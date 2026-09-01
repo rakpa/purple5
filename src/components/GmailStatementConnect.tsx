@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, Loader2, Mail, RefreshCw, Unplug } from "lucide-react";
+import { FileText, Loader2, Mail, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,21 +15,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  disconnectGmail,
   fetchGmailStatements,
-  finishGmailConnect,
   getGmailStatus,
   importGmailTransactions,
   saveGmailStatementPassword,
-  startGmailConnect,
   type GmailCategoryGroup,
 } from "@/lib/gmail";
+import { syncGmailFromGoogleLogin } from "@/lib/gmail-session";
+import { supabase } from "@/lib/supabase";
 import { formatCurrency } from "@/lib/utils";
 
 export function GmailStatementConnect() {
   const queryClient = useQueryClient();
   const [password, setPassword] = useState("");
   const [category, setCategory] = useState("all");
+  const [loginEmail, setLoginEmail] = useState<string | null>(null);
   const [result, setResult] = useState<{
     statements: { subject: string; filename: string; date: string; transaction_count: number; text_preview?: string }[];
     transactions: GmailCategoryGroup["transactions"];
@@ -37,41 +37,21 @@ export function GmailStatementConnect() {
     message?: string;
   } | null>(null);
 
-  const finishingOAuth = useRef(false);
-
   const statusQuery = useQuery({
     queryKey: ["gmail-status"],
     queryFn: getGmailStatus,
   });
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const state = params.get("state");
-    if (!code || !state || !state.includes(".")) return;
-    if (finishingOAuth.current) return;
-    finishingOAuth.current = true;
-    const redirectUri = `${window.location.origin}/settings`;
-    window.history.replaceState(null, "", window.location.pathname);
-    finishGmailConnect(code, state, redirectUri)
-      .then(async (payload) => {
-        toast.success(`Gmail connected${payload.email ? `: ${payload.email}` : ""}`);
+    supabase.auth.getUser().then(({ data }) => {
+      setLoginEmail(data.user?.email ?? null);
+    });
+    void syncGmailFromGoogleLogin()
+      .then(async () => {
         await queryClient.invalidateQueries({ queryKey: ["gmail-status"] });
       })
-      .catch((error) => {
-        finishingOAuth.current = false;
-        toast.error(error instanceof Error ? error.message : "Could not finish Gmail connect");
-      });
+      .catch(() => {});
   }, [queryClient]);
-
-  const connectMutation = useMutation({
-    mutationFn: async () => {
-      const redirectUri = `${window.location.origin}/settings`;
-      const started = await startGmailConnect(redirectUri, "/settings");
-      window.location.href = started.url;
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
 
   const savePasswordMutation = useMutation({
     mutationFn: () => saveGmailStatementPassword(password),
@@ -83,7 +63,13 @@ export function GmailStatementConnect() {
   });
 
   const fetchMutation = useMutation({
-    mutationFn: () => fetchGmailStatements({ statementPassword: password || undefined }),
+    mutationFn: async () => {
+      const { data } = await supabase.auth.getSession();
+      return fetchGmailStatements({
+        statementPassword: password || undefined,
+        googleAccessToken: data.session?.provider_token,
+      });
+    },
     onSuccess: (payload) => {
       setResult(payload);
       setCategory("all");
@@ -102,17 +88,7 @@ export function GmailStatementConnect() {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const disconnectMutation = useMutation({
-    mutationFn: disconnectGmail,
-    onSuccess: async () => {
-      toast.success("Gmail disconnected");
-      setResult(null);
-      await queryClient.invalidateQueries({ queryKey: ["gmail-status"] });
-    },
-    onError: (error: Error) => toast.error(error.message),
-  });
-
-  const connected = statusQuery.data?.connected;
+  const email = statusQuery.data?.email || loginEmail;
   const filteredTransactions = useMemo(() => {
     const txns = result?.transactions ?? [];
     if (category === "all") return txns;
@@ -127,81 +103,59 @@ export function GmailStatementConnect() {
           Gmail bank statements
         </CardTitle>
         <CardDescription>
-          Connect Gmail, then fetch Credit Agricole emails titled “Wyciąg elektroniczny”. The PDF is unlocked with your statement password and transactions are grouped by category.
+          Statement emails are read from the Google account you already used to sign in. There is no second Connect or authorize step.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={connected ? "secondary" : "outline"} className="rounded-full">
-            {connected ? `Connected: ${statusQuery.data?.email || "Gmail"}` : "Not connected"}
+          <Badge variant="secondary" className="rounded-full">
+            {email ? `Using ${email}` : "Using your Google login"}
           </Badge>
           <Badge variant="outline" className="rounded-full">
             Credit Agricole
           </Badge>
         </div>
+        <p className="text-sm text-muted-foreground">
+          If you are already signed in, this Gmail is ready. Google may ask for statement-email access the next time you sign in, once. After that it stays on.
+        </p>
 
-        {!connected ? (
-          <Button
-            size="lg"
-            className="rounded-xl"
-            onClick={() => connectMutation.mutate()}
-            disabled={connectMutation.isPending}
-          >
-            {connectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-            Connect Gmail
-          </Button>
-        ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="ca-pdf-password">Credit Agricole PDF password</Label>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Input
-                  id="ca-pdf-password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder={statusQuery.data?.has_password ? "Saved — enter to replace" : "Statement PIN"}
-                  className="h-11 rounded-xl"
-                />
-                <Button
-                  variant="outline"
-                  className="rounded-xl"
-                  onClick={() => savePasswordMutation.mutate()}
-                  disabled={!password || savePasswordMutation.isPending}
-                >
-                  Save password
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Credit Agricole sends a password-protected PDF. This is not your Gmail password.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button
-                className="rounded-xl"
-                onClick={() => fetchMutation.mutate()}
-                disabled={fetchMutation.isPending}
-              >
-                {fetchMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileText className="h-4 w-4" />
-                )}
-                Fetch statements
-              </Button>
-              <Button
-                variant="ghost"
-                className="rounded-xl text-destructive"
-                onClick={() => disconnectMutation.mutate()}
-                disabled={disconnectMutation.isPending}
-              >
-                <Unplug className="h-4 w-4" />
-                Disconnect
-              </Button>
-            </div>
+        <div className="space-y-2">
+          <Label htmlFor="ca-pdf-password">Credit Agricole PDF password</Label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Input
+              id="ca-pdf-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={statusQuery.data?.has_password ? "Saved — enter to replace" : "Statement PIN"}
+              className="h-11 rounded-xl"
+            />
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => savePasswordMutation.mutate()}
+              disabled={!password || savePasswordMutation.isPending}
+            >
+              Save password
+            </Button>
           </div>
-        )}
+          <p className="text-xs text-muted-foreground">
+            This unlocks the bank PDF. It is not your Gmail password.
+          </p>
+        </div>
+
+        <Button
+          className="rounded-xl"
+          onClick={() => fetchMutation.mutate()}
+          disabled={fetchMutation.isPending}
+        >
+          {fetchMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <FileText className="h-4 w-4" />
+          )}
+          Fetch statements
+        </Button>
 
         {result && (
           <div className="space-y-4">

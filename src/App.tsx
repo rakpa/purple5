@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { supabase } from "@/lib/supabase";
+import { syncGmailFromGoogleLogin } from "@/lib/gmail-session";
 import Login from "./pages/Login";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
@@ -115,6 +116,24 @@ function AuthCallbackHandler() {
   return null;
 }
 
+function GmailSessionSync() {
+  useEffect(() => {
+    const sync = () => {
+      void syncGmailFromGoogleLogin().catch(() => {});
+    };
+    sync();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        sync();
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+  return null;
+}
+
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -123,6 +142,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthCallbackHandler />
+          <GmailSessionSync />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route
