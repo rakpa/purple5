@@ -7,7 +7,15 @@ Your app needs these environment variables to work with Supabase:
 ```
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
+
+PLAID_CLIENT_ID=your_plaid_client_id
+PLAID_SECRET=your_plaid_secret
+PLAID_ENV=sandbox
 ```
+
+Plaid keys are server-only. Do **not** prefix `PLAID_SECRET` with `VITE_` or it will be exposed in the browser. For production (Vercel), set the same `PLAID_*` variables in the project Environment Variables dashboard.
+
+To store connected banks in Supabase, run `supabase-plaid-setup.sql` in the SQL editor.
 
 ## How to Set Environment Variables
 

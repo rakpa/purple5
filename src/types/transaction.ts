@@ -8,6 +8,9 @@ export interface Transaction {
   date: string;
   description: string | null;
   category: string;
+  source?: string | null;
+  plaid_transaction_id?: string | null;
+  plaid_account_id?: string | null;
   created_at: string;
   updated_at: string;
 }

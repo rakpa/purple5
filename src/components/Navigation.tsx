@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Menu, X, LayoutDashboard, PlusCircle, BarChart3, Settings, LogOut, MapPin, Sparkles, Wallet } from "lucide-react";
+import { Menu, X, LayoutDashboard, PlusCircle, BarChart3, Settings, LogOut, MapPin, Sparkles, Wallet, Landmark } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const navItems = [
   { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
+  { name: "Banks", icon: Landmark, href: "/banks" },
   { name: "Budget", icon: Wallet, href: "/budget" },
   { name: "Add Expense/Income", icon: PlusCircle, href: "/" },
   { name: "AI Summary", icon: Sparkles, href: "/ai-summary" },
@@ -150,7 +151,7 @@ export function Navigation() {
       <div
         className={cn(
           "md:hidden overflow-hidden transition-all duration-300 ease-in-out",
-          mobileMenuOpen ? "max-h-80" : "max-h-0"
+          mobileMenuOpen ? "max-h-[32rem]" : "max-h-0"
         )}
       >
         <div className="space-y-1 px-4 pb-4">

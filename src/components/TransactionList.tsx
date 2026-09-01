@@ -17,6 +17,7 @@ import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, star
 import type { Transaction } from "@/types/transaction";
 import { EditTransactionDialog } from "@/components/EditTransactionDialog";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { Badge } from "@/components/ui/badge";
 
 const filterOptions = [
   { id: "all", label: "All" },
@@ -252,8 +253,13 @@ export function TransactionList() {
                   </div>
 
                   {/* Date */}
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground flex items-center gap-2">
                     {formatDate(transaction.date)}
+                    {transaction.source === "plaid" && (
+                      <Badge variant="secondary" className="rounded-full text-[10px] px-2 py-0">
+                        Bank
+                      </Badge>
+                    )}
                   </p>
                 </div>
 

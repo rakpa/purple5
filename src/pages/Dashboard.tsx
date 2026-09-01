@@ -32,6 +32,7 @@ import { cn, capitalizeFirst } from "@/lib/utils";
 import type { Transaction } from "@/types/transaction";
 import { EditTransactionDialog } from "@/components/EditTransactionDialog";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { PlaidBankConnect } from "@/components/PlaidBankConnect";
 
 const COLORS = {
   income: "#22c55e",
@@ -338,6 +339,10 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       <Navigation />
       <main className="mx-auto max-w-7xl px-4 py-4 sm:py-6 lg:py-8 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          <PlaidBankConnect compact />
+        </div>
+
         {/* Header */}
         <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <h1 className="text-xl font-semibold text-card-foreground">Dashboard</h1>

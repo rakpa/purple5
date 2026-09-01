@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { User, Mail, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { PlaidBankConnect } from "@/components/PlaidBankConnect";
 
 export default function Settings() {
   const [user, setUser] = useState<any>(null);
@@ -138,6 +139,8 @@ export default function Settings() {
               </div>
             </CardContent>
           </Card>
+
+          <PlaidBankConnect />
 
           {/* Account Actions */}
           <Card className="rounded-2xl shadow-card">

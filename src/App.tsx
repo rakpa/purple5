@@ -15,6 +15,7 @@ import Categories from "./pages/Categories";
 import India from "./pages/India";
 import AISummary from "./pages/AISummary";
 import Settings from "./pages/Settings";
+import Banks from "./pages/Banks";
 import Budget from "./pages/Budget";
 import NotFound from "./pages/NotFound";
 
@@ -169,6 +170,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <AISummary />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/banks"
+              element={
+                <ProtectedRoute>
+                  <Banks />
                 </ProtectedRoute>
               }
             />
