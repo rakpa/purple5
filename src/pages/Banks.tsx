@@ -11,7 +11,7 @@ export default function Banks() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Poland banks</h1>
             <p className="text-muted-foreground mt-2">
-              Connect Plaid, or import Credit Agricole statements from Gmail.
+              Connect Revolut with Plaid, or import Credit Agricole statements from Gmail.
             </p>
           </div>
           <GmailStatementConnect />

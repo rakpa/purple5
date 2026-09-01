@@ -369,6 +369,12 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
         (typeof req.body.redirect_uri === "string" && req.body.redirect_uri) ||
         process.env.PLAID_REDIRECT_URI ||
         "";
+      if (!redirectUri) {
+        throw new HttpError(
+          400,
+          "Revolut Open Banking needs a redirect URI. Add https://purple5.vercel.app/banks in Plaid Dashboard → Allowed redirect URIs, and set PLAID_REDIRECT_URI."
+        );
+      }
 
       const payload: Record<string, unknown> = {
         user: { client_user_id: userId },
@@ -376,9 +382,12 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
         language: "en",
         country_codes: ["PL"],
         products: ["transactions"],
-        transactions: { days_requested: 90 },
+        transactions: { days_requested: 180 },
+        redirect_uri: redirectUri,
       };
-      if (redirectUri) payload.redirect_uri = redirectUri;
+      if (typeof req.body.institution_id === "string" && req.body.institution_id) {
+        payload.institution_id = req.body.institution_id;
+      }
 
       try {
         const created = await plaidPost<{ link_token: string; expiration: string }>(
@@ -395,22 +404,12 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
           },
         };
       } catch (error: unknown) {
-        if (redirectUri) {
-          delete payload.redirect_uri;
-          const fallback = await plaidPost<{ link_token: string; expiration: string }>(
-            "/link/token/create",
-            payload
+        const message = plaidErrorMessage(error);
+        if (redirectUri && /redirect|oauth/i.test(message)) {
+          throw new HttpError(
+            400,
+            `Add this exact URL in Plaid Dashboard → Team Settings → API → Allowed redirect URIs: ${redirectUri}`
           );
-          return {
-            status: 200,
-            body: {
-              link_token: fallback.link_token,
-              expiration: fallback.expiration,
-              env: plaidEnvName(),
-              country_codes: ["PL"],
-              redirect_uri_skipped: true,
-            },
-          };
         }
         throw error;
       }
@@ -420,7 +419,13 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
       const publicToken = String(req.body.public_token || "");
       if (!publicToken) throw new HttpError(400, "public_token is required");
       const item = await exchangeAndStore(userId, publicToken, req.authorization);
-      return { status: 200, body: { item } };
+      const stored = await loadItem(userId, item.item_id, req.authorization);
+      const transactions = stored ? await syncTransactions(stored) : [];
+      if (stored) await persistItem(userId, stored, req.authorization);
+      return {
+        status: 200,
+        body: { item: stored ? publicItem(stored) : item, transactions },
+      };
     }
 
     if (req.method === "POST" && action === "sandbox-connect") {
