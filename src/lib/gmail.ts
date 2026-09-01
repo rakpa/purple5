@@ -69,14 +69,18 @@ async function gmailFetch<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   const raw = await response.text();
-  let payload: T & { error?: string } = {} as T & { error?: string };
+  let payload: T & { error?: string; code?: string } = {} as T & { error?: string; code?: string };
   try {
-    payload = raw ? (JSON.parse(raw) as T & { error?: string }) : payload;
+    payload = raw ? (JSON.parse(raw) as T & { error?: string; code?: string }) : payload;
   } catch {
-    payload = { error: raw.replace(/\s+/g, " ").slice(0, 180) } as T & { error?: string };
+    payload = { error: raw.replace(/\s+/g, " ").slice(0, 180) } as T & { error?: string; code?: string };
   }
   if (!response.ok) {
-    throw new Error(payload.error || `Gmail request failed (${response.status})`);
+    const error = new Error(payload.error || `Gmail request failed (${response.status})`) as Error & {
+      code?: string;
+    };
+    error.code = payload.code;
+    throw error;
   }
   return payload;
 }

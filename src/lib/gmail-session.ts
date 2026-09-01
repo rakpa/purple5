@@ -1,6 +1,8 @@
 import { saveGmailSessionTokens } from "./gmail";
 import { supabase } from "./supabase";
 
+const GMAIL_SCOPES = "email profile https://www.googleapis.com/auth/gmail.readonly";
+
 export async function syncGmailFromGoogleLogin() {
   const { data } = await supabase.auth.getSession();
   const session = data.session;
@@ -19,4 +21,28 @@ export async function syncGmailFromGoogleLogin() {
     expires_in: 3600,
   }).catch(() => null);
   return { email: session.user.email || null, stored: true };
+}
+
+export async function requestGmailAccess(returnTo = "/") {
+  const origin = window.location.origin;
+  const redirectUrl = `${origin}${returnTo}`;
+  localStorage.setItem("auth_redirect_url", redirectUrl);
+  localStorage.setItem("auth_origin", origin);
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: redirectUrl,
+      scopes: GMAIL_SCOPES,
+      queryParams: {
+        access_type: "offline",
+        prompt: "consent",
+        include_granted_scopes: "true",
+      },
+    },
+  });
+  if (error) {
+    localStorage.removeItem("auth_redirect_url");
+    localStorage.removeItem("auth_origin");
+    throw error;
+  }
 }

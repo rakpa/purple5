@@ -23,7 +23,7 @@ import {
   type GmailCategoryGroup,
   type GmailStatementMatch,
 } from "@/lib/gmail";
-import { syncGmailFromGoogleLogin } from "@/lib/gmail-session";
+import { syncGmailFromGoogleLogin, requestGmailAccess } from "@/lib/gmail-session";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency } from "@/lib/utils";
 
@@ -31,6 +31,33 @@ function formatMailDate(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value || "";
   return parsed.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+function errorCode(error: Error) {
+  return (error as Error & { code?: string }).code || "";
+}
+
+function ErrorText({ message }: { message: string }) {
+  const parts = message.split(/(https:\/\/[^\s]+)/g);
+  return (
+    <p className="text-sm text-destructive break-words">
+      {parts.map((part, index) =>
+        part.startsWith("https://") ? (
+          <a
+            key={`${part}-${index}`}
+            href={part}
+            target="_blank"
+            rel="noreferrer"
+            className="underline font-medium"
+          >
+            {part}
+          </a>
+        ) : (
+          <span key={`${part}-${index}`}>{part}</span>
+        )
+      )}
+    </p>
+  );
 }
 
 export function GmailStatementConnect() {
@@ -47,6 +74,19 @@ export function GmailStatementConnect() {
     message?: string;
   } | null>(null);
 
+  const [fetchError, setFetchError] = useState<{ message: string; code?: string } | null>(null);
+  const [granting, setGranting] = useState(false);
+
+  const allowGmail = async () => {
+    try {
+      setGranting(true);
+      await requestGmailAccess(window.location.pathname || "/");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open Google");
+      setGranting(false);
+    }
+  };
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setLoginEmail(data.user?.email ?? null);
@@ -62,13 +102,21 @@ export function GmailStatementConnect() {
       });
     },
     onSuccess: (payload) => {
+      setFetchError(null);
       setMatches(payload.statements || []);
       setSelected(null);
       setResult(null);
       if (payload.message) toast.message(payload.message);
       else toast.success(`Found ${payload.statements.length} statement email${payload.statements.length === 1 ? "" : "s"}`);
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      const code = errorCode(error);
+      setFetchError({ message: error.message, code });
+      toast.error(error.message);
+      if (code === "gmail_scope_missing" || code === "gmail_token_expired") {
+        void allowGmail();
+      }
+    },
   });
 
   const openMutation = useMutation({
@@ -128,18 +176,45 @@ export function GmailStatementConnect() {
           </Badge>
         </div>
 
-        <Button
-          className="rounded-xl"
-          onClick={() => searchMutation.mutate()}
-          disabled={searchMutation.isPending}
-        >
-          {searchMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <FileText className="h-4 w-4" />
-          )}
-          Fetch your bank statement
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            className="rounded-xl"
+            onClick={() => searchMutation.mutate()}
+            disabled={searchMutation.isPending || granting}
+          >
+            {searchMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            Fetch your bank statement
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-xl"
+            onClick={() => void allowGmail()}
+            disabled={granting}
+          >
+            {granting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+            Allow Gmail access
+          </Button>
+        </div>
+
+        {fetchError && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 space-y-2">
+            <ErrorText message={fetchError.message} />
+            {fetchError.code === "gmail_api_disabled" && (
+              <a
+                href="https://console.cloud.google.com/apis/library/gmail.googleapis.com"
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-medium underline"
+              >
+                Enable Gmail API in Google Cloud
+              </a>
+            )}
+          </div>
+        )}
 
         {matches.length > 0 && (
           <div className="space-y-2">
