@@ -56,6 +56,12 @@ export default function Login() {
         options: {
           redirectTo: redirectUrl,
           skipBrowserRedirect: false,
+          scopes: "email profile https://www.googleapis.com/auth/gmail.readonly",
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+            include_granted_scopes: "true",
+          },
         },
       });
 
@@ -89,7 +95,7 @@ export default function Login() {
           </div>
           <CardTitle className="text-2xl font-semibold">Welcome to ExpenseTrack</CardTitle>
           <CardDescription>
-            Sign in with your Google account to manage your finances
+            Sign in with your Google account to manage your finances. The same login is used to read Credit Agricole statement emails.
           </CardDescription>
         </CardHeader>
         <CardContent>

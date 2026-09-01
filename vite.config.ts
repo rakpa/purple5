@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { plaidApiPlugin } from "./server/vite-plaid-plugin";
+import { gmailApiPlugin } from "./server/vite-gmail-plugin";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -16,6 +17,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       plaidApiPlugin(env),
+      gmailApiPlugin(env),
       mode === "development" && componentTagger(),
     ].filter(Boolean),
     resolve: {

@@ -1,5 +1,6 @@
 import { Navigation } from "@/components/Navigation";
 import { PlaidBankConnect } from "@/components/PlaidBankConnect";
+import { GmailStatementConnect } from "@/components/GmailStatementConnect";
 
 export default function Banks() {
   return (
@@ -10,9 +11,10 @@ export default function Banks() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Poland banks</h1>
             <p className="text-muted-foreground mt-2">
-              Connect a Polish bank in Plaid sandbox and import PLN transactions.
+              Connect Plaid, or import Credit Agricole statements from Gmail.
             </p>
           </div>
+          <GmailStatementConnect />
           <PlaidBankConnect />
         </div>
       </main>
