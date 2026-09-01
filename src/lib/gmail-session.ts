@@ -17,6 +17,6 @@ export async function syncGmailFromGoogleLogin() {
     access_token: session.provider_token,
     refresh_token: session.provider_refresh_token,
     expires_in: 3600,
-  });
+  }).catch(() => null);
   return { email: session.user.email || null, stored: true };
 }

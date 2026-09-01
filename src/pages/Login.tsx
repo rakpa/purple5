@@ -59,6 +59,7 @@ export default function Login() {
           scopes: "email profile https://www.googleapis.com/auth/gmail.readonly",
           queryParams: {
             access_type: "offline",
+            prompt: "consent",
             include_granted_scopes: "true",
           },
         },

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileText, Loader2, Mail, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -17,8 +17,10 @@ import {
 import {
   fetchGmailStatements,
   getGmailStatus,
+  getStoredStatementPassword,
   importGmailTransactions,
   saveGmailStatementPassword,
+  storeStatementPassword,
   type GmailCategoryGroup,
 } from "@/lib/gmail";
 import { syncGmailFromGoogleLogin } from "@/lib/gmail-session";
@@ -27,9 +29,10 @@ import { formatCurrency } from "@/lib/utils";
 
 export function GmailStatementConnect() {
   const queryClient = useQueryClient();
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState(() => getStoredStatementPassword());
   const [category, setCategory] = useState("all");
   const [loginEmail, setLoginEmail] = useState<string | null>(null);
+  const autoFetched = useRef(false);
   const [result, setResult] = useState<{
     statements: { subject: string; filename: string; date: string; transaction_count: number; text_preview?: string }[];
     transactions: GmailCategoryGroup["transactions"];
@@ -56,17 +59,21 @@ export function GmailStatementConnect() {
   const savePasswordMutation = useMutation({
     mutationFn: () => saveGmailStatementPassword(password),
     onSuccess: async () => {
+      storeStatementPassword(password);
       toast.success("Statement password saved");
       await queryClient.invalidateQueries({ queryKey: ["gmail-status"] });
+      fetchMutation.mutate();
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
   const fetchMutation = useMutation({
     mutationFn: async () => {
+      const pin = password || getStoredStatementPassword();
+      if (pin) storeStatementPassword(pin);
       const { data } = await supabase.auth.getSession();
       return fetchGmailStatements({
-        statementPassword: password || undefined,
+        statementPassword: pin || undefined,
         googleAccessToken: data.session?.provider_token,
       });
     },
@@ -78,6 +85,23 @@ export function GmailStatementConnect() {
     },
     onError: (error: Error) => toast.error(error.message),
   });
+
+  useEffect(() => {
+    if (autoFetched.current) return;
+    const pin = password || getStoredStatementPassword();
+    if (!pin) return;
+    let cancelled = false;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (cancelled || autoFetched.current || !data.session?.provider_token) return;
+      autoFetched.current = true;
+      fetchMutation.mutate();
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Fetch once when Settings opens with a saved PIN and a live Google token.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [password]);
 
   const importMutation = useMutation({
     mutationFn: () => importGmailTransactions(filteredTransactions),
@@ -116,7 +140,9 @@ export function GmailStatementConnect() {
           </Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          If you are already signed in, this Gmail is ready. Google may ask for statement-email access the next time you sign in, once. After that it stays on.
+          Enter the Credit Agricole PDF password, then this screen fetches emails titled
+          &quot;Wyciąg elektroniczny&quot; from the same Google account. Saving the password starts
+          the fetch. If Google asks for extra permission, allow it once.
         </p>
 
         <div className="space-y-2">

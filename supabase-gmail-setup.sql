@@ -4,13 +4,15 @@
 CREATE TABLE IF NOT EXISTS gmail_connections (
   user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT,
-  refresh_token TEXT NOT NULL,
+  refresh_token TEXT,
   access_token TEXT,
   access_token_expires_at TIMESTAMP WITH TIME ZONE,
   statement_password TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+ALTER TABLE gmail_connections ALTER COLUMN refresh_token DROP NOT NULL;
 
 ALTER TABLE gmail_connections ENABLE ROW LEVEL SECURITY;
 

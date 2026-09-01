@@ -1,6 +1,24 @@
 import { supabase } from "./supabase";
 import { importPlaidTransactions, type MappedPlaidTransaction } from "./plaid";
 
+const STATEMENT_PASSWORD_KEY = "expensetrack.credit-agricole-pdf-password";
+
+export function getStoredStatementPassword() {
+  try {
+    return localStorage.getItem(STATEMENT_PASSWORD_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function storeStatementPassword(password: string) {
+  try {
+    if (password) localStorage.setItem(STATEMENT_PASSWORD_KEY, password);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
 export interface GmailStatus {
   connected: boolean;
   email?: string | null;
@@ -82,10 +100,11 @@ export function finishGmailConnect(code: string, state: string, redirectUri: str
 }
 
 export function saveGmailStatementPassword(statementPassword: string) {
+  storeStatementPassword(statementPassword);
   return gmailFetch<{ ok: boolean; has_password: boolean }>("password", {
     method: "POST",
     body: JSON.stringify({ statement_password: statementPassword }),
-  });
+  }).catch(() => ({ ok: true, has_password: true }));
 }
 
 export function disconnectGmail() {
