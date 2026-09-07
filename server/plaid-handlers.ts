@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { POLISH_SANDBOX_BANKS } from "./polish-institutions";
+import { POLISH_BANKS } from "./polish-institutions";
 import { mapPlaidTransaction } from "./plaid-categories";
 import {
   deletePlaidItem,
@@ -32,14 +32,13 @@ class HttpError extends Error {
 }
 
 function plaidEnvName() {
-  return (process.env.PLAID_ENV || "sandbox").toLowerCase();
+  return (process.env.PLAID_ENV || "production").toLowerCase();
 }
 
 function plaidHost() {
   const env = plaidEnvName();
-  if (env === "production") return "https://production.plaid.com";
   if (env === "development") return "https://development.plaid.com";
-  return "https://sandbox.plaid.com";
+  return "https://production.plaid.com";
 }
 
 function credentials() {
@@ -100,10 +99,6 @@ async function requireUserId(authorization?: string) {
     if (!error && data.user) {
       return data.user.id;
     }
-  }
-
-  if (plaidEnvName() === "sandbox" && process.env.PLAID_ALLOW_UNAUTHENTICATED === "true") {
-    return "sandbox-local";
   }
 
   throw new HttpError(401, "Sign in required to connect a bank.");
@@ -249,7 +244,7 @@ async function exchangeAndStore(userId: string, publicToken: string, authorizati
   });
   const institutionName =
     accountsResponse.item.institution_name ||
-    POLISH_SANDBOX_BANKS.find((bank) => bank.institution_id === accountsResponse.item.institution_id)
+    POLISH_BANKS.find((bank) => bank.institution_id === accountsResponse.item.institution_id)
       ?.name ||
     "Poland bank";
 
@@ -353,7 +348,7 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
         body: {
           env: plaidEnvName(),
           country_codes: ["PL"],
-          institutions: POLISH_SANDBOX_BANKS,
+          institutions: POLISH_BANKS,
         },
       };
     }
@@ -426,32 +421,6 @@ export async function handlePlaidApi(req: PlaidApiRequest): Promise<PlaidApiResp
         status: 200,
         body: { item: stored ? publicItem(stored) : item, transactions },
       };
-    }
-
-    if (req.method === "POST" && action === "sandbox-connect") {
-      if (plaidEnvName() !== "sandbox") {
-        throw new HttpError(400, "Sandbox connect is only available in the Plaid sandbox environment.");
-      }
-      const institutionId = String(req.body.institution_id || POLISH_SANDBOX_BANKS[0].institution_id);
-      const known = POLISH_SANDBOX_BANKS.some((bank) => bank.institution_id === institutionId);
-      if (!known) {
-        throw new HttpError(400, "Choose a supported Poland sandbox bank.");
-      }
-
-      const created = await plaidPost<{ public_token: string }>("/sandbox/public_token/create", {
-        institution_id: institutionId,
-        initial_products: ["transactions"],
-        options: {
-          override_username: "user_good",
-          override_password: "pass_good",
-        },
-      });
-      const item = await exchangeAndStore(userId, created.public_token, req.authorization);
-      await sleep(process.env.VERCEL ? 500 : 1200);
-      const stored = await loadItem(userId, item.item_id, req.authorization);
-      const transactions = stored ? await syncTransactions(stored) : [];
-      if (stored) await persistItem(userId, stored, req.authorization);
-      return { status: 200, body: { item: stored ? publicItem(stored) : item, transactions } };
     }
 
     if (req.method === "POST" && action === "sync") {

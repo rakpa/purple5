@@ -17,7 +17,7 @@ dist-ssr
 .env.local
 .env.*.local
 
-# Local Plaid sandbox token store
+# Local Plaid token store
 .data
 
 # Editor directories and files

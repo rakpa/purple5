@@ -1,4 +1,4 @@
-export const POLISH_SANDBOX_BANKS = [
+export const POLISH_BANKS = [
   { institution_id: "ins_132922", name: "PKO Bank Polski" },
   { institution_id: "ins_132987", name: "mBank" },
   { institution_id: "ins_132948", name: "ING Bank Śląski" },
@@ -8,4 +8,4 @@ export const POLISH_SANDBOX_BANKS = [
   { institution_id: "ins_132675", name: "Revolut (PL)" },
 ] as const;
 
-export type PolishSandboxBank = (typeof POLISH_SANDBOX_BANKS)[number];
+export type PolishBank = (typeof POLISH_BANKS)[number];
