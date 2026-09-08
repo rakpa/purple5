@@ -105,16 +105,6 @@ export function exchangePlaidPublicToken(publicToken: string) {
   });
 }
 
-export function connectPolandSandboxBank(institutionId: string) {
-  return plaidFetch<{ item: PlaidItem; transactions: MappedPlaidTransaction[] }>(
-    "sandbox-connect",
-    {
-      method: "POST",
-      body: JSON.stringify({ institution_id: institutionId }),
-    }
-  );
-}
-
 export function syncPlaidItem(itemId: string) {
   return plaidFetch<{ item: PlaidItem; transactions: MappedPlaidTransaction[] }>("sync", {
     method: "POST",

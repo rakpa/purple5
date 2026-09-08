@@ -10,7 +10,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 PLAID_CLIENT_ID=your_plaid_client_id
 PLAID_SECRET=your_plaid_secret
-PLAID_ENV=sandbox
+PLAID_ENV=production
 ```
 
 Plaid keys are server-only. Do **not** prefix `PLAID_SECRET` with `VITE_` or it will be exposed in the browser. For production (Vercel), set the same `PLAID_*` variables in the project Environment Variables dashboard.

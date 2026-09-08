@@ -1,4 +1,4 @@
--- Plaid item storage for Poland bank linking (sandbox and live Revolut)
+-- Plaid item storage for Poland bank linking (live Revolut / Open Banking)
 -- Required before connecting a real Revolut account.
 -- Run in Supabase SQL Editor: https://supabase.com/dashboard/project/ggpxsxanqpapwyqnfivv/sql/new
 
