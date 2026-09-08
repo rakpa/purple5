@@ -33,55 +33,27 @@ export default function Login() {
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
-      
-      // Get the current origin (works for both localhost and production)
-      const currentOrigin = window.location.origin;
-      const redirectUrl = `${currentOrigin}/dashboard`;
-      
-      // Store the intended redirect URL in localStorage
-      // This helps us redirect correctly even if Supabase redirects to the wrong URL
-      localStorage.setItem('auth_redirect_url', redirectUrl);
-      localStorage.setItem('auth_origin', currentOrigin);
-      
-      // Log for debugging
-      console.log("🔐 OAuth Sign In");
-      console.log("Current origin:", currentOrigin);
-      console.log("Redirect URL:", redirectUrl);
-      console.log("Stored in localStorage");
-      
-      // For localhost, we need to use the full URL in redirectTo
-      // Supabase will validate this against the allowed redirect URLs
-      const { error, data } = await supabase.auth.signInWithOAuth({
+
+      // Keep the initial login limited to basic Google identity scopes.
+      // Gmail access is requested separately from the bank-statement feature,
+      // so signing in does not trigger Google's restricted-scope warning.
+      const redirectUrl = `${window.location.origin}/dashboard`;
+
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
-          scopes: "email profile https://www.googleapis.com/auth/gmail.readonly",
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-            include_granted_scopes: "true",
-          },
         },
       });
 
       if (error) {
         console.error("OAuth error:", error);
         toast.error(`Sign in failed: ${error.message}`);
-        // Clean up localStorage on error
-        localStorage.removeItem('auth_redirect_url');
-        localStorage.removeItem('auth_origin');
         setLoading(false);
-      } else {
-        // If successful, the browser will redirect to Google
-        // Then Google redirects to Supabase, which redirects back to our app
-        console.log("OAuth redirect initiated:", data);
       }
     } catch (error) {
       console.error("Error signing in:", error);
       toast.error("An unexpected error occurred");
-      localStorage.removeItem('auth_redirect_url');
-      localStorage.removeItem('auth_origin');
       setLoading(false);
     }
   };
@@ -95,7 +67,7 @@ export default function Login() {
           </div>
           <CardTitle className="text-2xl font-semibold">Welcome to ExpenseTrack</CardTitle>
           <CardDescription>
-            Sign in with your Google account to manage your finances. The same login is used to read Credit Agricole statement emails.
+            Sign in securely with your Google account to manage your finances. Gmail access for bank statements is requested separately when you choose to use that feature.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -139,5 +111,3 @@ export default function Login() {
     </div>
   );
 }
-
-
