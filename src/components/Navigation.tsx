@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Menu, X, LayoutDashboard, PlusCircle, BarChart3, Settings, LogOut, MapPin, Sparkles, Wallet, Landmark } from "lucide-react";
+import { Menu, X, LayoutDashboard, PlusCircle, BarChart3, Settings, LogOut, MapPin, Sparkles, Wallet } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const navItems = [
   { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-  { name: "Banks", icon: Landmark, href: "/banks" },
   { name: "Budget", icon: Wallet, href: "/budget" },
   { name: "Add Expense/Income", icon: PlusCircle, href: "/" },
   { name: "AI Summary", icon: Sparkles, href: "/ai-summary" },
@@ -31,12 +30,10 @@ export function Navigation() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Get current user
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
     });
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -62,9 +59,7 @@ export function Navigation() {
   };
 
   const getUserInitials = () => {
-    if (user?.email) {
-      return user.email.charAt(0).toUpperCase();
-    }
+    if (user?.email) return user.email.charAt(0).toUpperCase();
     return "U";
   };
 
@@ -72,7 +67,6 @@ export function Navigation() {
     <nav className="bg-primary shadow-elevated sticky top-0 z-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
           <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-foreground/20 backdrop-blur-sm">
               <span className="text-lg font-bold text-primary-foreground">PLN</span>
@@ -80,7 +74,6 @@ export function Navigation() {
             <span className="text-xl font-semibold text-primary-foreground">ExpenseTrack</span>
           </Link>
 
-          {/* Desktop Navigation */}
           <div className="hidden md:flex md:items-center md:gap-1">
             {navItems.map((item) => {
               const isActive = location.pathname === item.href || (item.href === "/" && location.pathname === "/");
@@ -100,8 +93,7 @@ export function Navigation() {
                 </Link>
               );
             })}
-            
-            {/* User Menu */}
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -118,14 +110,9 @@ export function Navigation() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 rounded-xl">
                 {user?.email && (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground border-b">
-                    {user.email}
-                  </div>
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground border-b">{user.email}</div>
                 )}
-                <DropdownMenuItem
-                  onClick={handleSignOut}
-                  className="rounded-lg cursor-pointer"
-                >
+                <DropdownMenuItem onClick={handleSignOut} className="rounded-lg cursor-pointer">
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
                 </DropdownMenuItem>
@@ -133,7 +120,6 @@ export function Navigation() {
             </DropdownMenu>
           </div>
 
-          {/* Mobile menu button */}
           <div className="md:hidden">
             <Button
               variant="ghost"
@@ -147,13 +133,7 @@ export function Navigation() {
         </div>
       </div>
 
-      {/* Mobile Navigation */}
-      <div
-        className={cn(
-          "md:hidden overflow-hidden transition-all duration-300 ease-in-out",
-          mobileMenuOpen ? "max-h-[32rem]" : "max-h-0"
-        )}
-      >
+      <div className={cn("md:hidden overflow-hidden transition-all duration-300 ease-in-out", mobileMenuOpen ? "max-h-[32rem]" : "max-h-0")}>
         <div className="space-y-1 px-4 pb-4">
           {navItems.map((item) => {
             const isActive = location.pathname === item.href || (item.href === "/" && location.pathname === "/");
